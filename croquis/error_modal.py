@@ -1,15 +1,14 @@
 import traceback
 import sys
-from typing import NoReturn
 
-from tkinter import Tk, Frame, N, Button, END, DISABLED, WORD
+from tkinter import Tk, END, DISABLED, WORD, TOP, BOTTOM, BOTH, X
+from tkinter import ttk
 import tkinter.scrolledtext as scrolledtext
 from croquis.util import resource_path
+from croquis.theme import apply_theme
 
 WIDTH = 480
-LABEL_HEIGHT = 180
-BUTTON_AREA_HEIGH = 80
-HEIGH = LABEL_HEIGHT + BUTTON_AREA_HEIGH
+HEIGH = 260
 PADDING = 12
 
 BACKGROUND = "#C9C9C9"
@@ -26,24 +25,17 @@ def show_error_modal(e: Exception, critical: bool = True):
 
 def _show_error_modal(message: str):
     tk = Tk()
+    apply_theme(tk)
     tk.iconbitmap(resource_path("icon.ico"))
     tk.geometry(f"{WIDTH}x{HEIGH}")
     tk.title("Fatal error")
     tk.resizable(False, False)
-    tk.grid_propagate(False)
-    tk.configure(bg=BACKGROUND)
 
-    error_message_frame = Frame(
-        tk,
-        height=LABEL_HEIGHT - 2 * PADDING,
-        width=WIDTH - 2 * PADDING,
-        background=BACKGROUND,
-    )
-    error_message_frame.grid(row=0)
-    error_message_frame.grid_propagate(False)
+    root_frame = ttk.Frame(tk, padding=PADDING)
+    root_frame.pack(fill=BOTH, expand=True)
 
     text = scrolledtext.ScrolledText(
-        error_message_frame,
+        root_frame,
         font=("arial", 12),
         width=46,
         height=8,
@@ -54,21 +46,15 @@ def _show_error_modal(message: str):
     )
     text.insert(END, message)
     text.config(state=DISABLED)
-    text.grid()
+    text.pack(side=TOP, fill=BOTH, expand=True)
 
-    button_frame = Frame(
-        tk, height=BUTTON_AREA_HEIGH, width=WIDTH, background=BACKGROUND
-    )
-    button_frame.grid(row=1)
-    button_frame.grid_propagate(False)
+    button_frame = ttk.Frame(root_frame)
+    button_frame.pack(side=BOTTOM, fill=X, pady=(PADDING, 0))
 
-    button = Button(
+    ttk.Button(
         button_frame,
-        width=20,
-        height=2,
         text=CLOSE_LABEL,
         command=tk.quit,
-    )
-    button.place(relx=0.5, rely=0.5, anchor=N)
+    ).pack(anchor="center")
 
     tk.mainloop()

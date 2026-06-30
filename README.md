@@ -18,6 +18,7 @@ controls.
 - **In-app configuration** — add/edit/remove image sets, categories, modes, and the
   window size from the **Options...** / **Configure Images...** menu, no need to hand-edit
   `config.toml`.
+- **Follows your OS light/dark theme** in the menu and config editor.
 - **Pause, skip back/forward, random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 

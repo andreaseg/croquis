@@ -9,6 +9,7 @@ from croquis.main_menu import start_main_menu
 from croquis.error_modal import show_error_modal
 from croquis.model import *
 from croquis.config_editor import open_options_editor, open_imageset_editor
+from croquis.theme import apply_theme
 
 CONFIG_PATH = "config.toml"
 
@@ -58,13 +59,13 @@ def _start():
         action = "main_menu"
 
     tk = Tk()
+    apply_theme(tk)
     tk.iconbitmap(resource_path("icon.ico"))
     tk.geometry(config.dimensions)
 
     width, height = [int(s) for s in config.dimensions.split("x")]
 
     canvas = Canvas(tk, width=width, height=height, background=BACKGROUND_COLOR)
-    canvas.pack(fill="both", expand=True)
 
     current_screen = [None]
 
@@ -99,6 +100,7 @@ def _start():
             print("Picked from bundles:")
             for path in paths:
                 print(f" - {path}")
+            canvas.pack(fill="both", expand=True)
             start_session(
                 tk,
                 canvas,
@@ -110,13 +112,13 @@ def _start():
             )
 
         elif action == "main_menu":
+            canvas.pack_forget()
             start_main_menu(
                 tk,
                 canvas,
                 config.imageset,
                 config.mode,
                 config.category,
-                (width, height),
                 callback=select_state,
             )
 

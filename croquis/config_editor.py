@@ -1,7 +1,7 @@
 import copy
 import re
 from typing import Callable
-from tkinter import *
+from tkinter import Tk, Toplevel, StringVar, BooleanVar, END, LEFT, RIGHT, TOP, BOTTOM, X, Y, BOTH, W
 from tkinter import simpledialog, messagebox, filedialog, ttk
 
 from croquis.model import *
@@ -12,24 +12,25 @@ IMAGESET_WINDOW_SIZE = "780x520"
 ERROR_TEXT_COLOR = "#CC3333"
 
 
-def _build_listbox_crud(
-    parent: Frame,
+def _build_tree_crud(
+    parent: ttk.Frame,
     on_select: Callable[[str | None], None],
     on_add: Callable[[], None],
     on_remove: Callable[[str], None],
     on_rename: Callable[[str], None],
-) -> Listbox:
-    frame = Frame(parent)
+) -> ttk.Treeview:
+    frame = ttk.Frame(parent)
     frame.pack(side=LEFT, fill=Y, padx=8, pady=8)
 
-    listbox = Listbox(frame, exportselection=False, width=24, height=14)
-    listbox.pack(side=TOP, fill=Y)
+    tree = ttk.Treeview(frame, show="tree", selectmode="browse", height=14)
+    tree.column("#0", width=180)
+    tree.pack(side=TOP, fill=Y)
 
     def selected_name() -> str | None:
-        selection = listbox.curselection()
-        return listbox.get(selection[0]) if selection else None
+        selection = tree.selection()
+        return selection[0] if selection else None
 
-    listbox.bind("<<ListboxSelect>>", lambda e: on_select(selected_name()))
+    tree.bind("<<TreeviewSelect>>", lambda e: on_select(selected_name()))
 
     def do_rename():
         name = selected_name()
@@ -41,23 +42,22 @@ def _build_listbox_crud(
         if name:
             on_remove(name)
 
-    button_frame = Frame(frame)
+    button_frame = ttk.Frame(frame)
     button_frame.pack(side=TOP, fill=X, pady=4)
-    Button(button_frame, text="Add", command=on_add).pack(side=LEFT, padx=2)
-    Button(button_frame, text="Rename", command=do_rename).pack(side=LEFT, padx=2)
-    Button(button_frame, text="Remove", command=do_remove).pack(side=LEFT, padx=2)
+    ttk.Button(button_frame, text="Add", command=on_add).pack(side=LEFT, padx=2)
+    ttk.Button(button_frame, text="Rename", command=do_rename).pack(side=LEFT, padx=2)
+    ttk.Button(button_frame, text="Remove", command=do_remove).pack(side=LEFT, padx=2)
 
-    return listbox
+    return tree
 
 
-def _refresh_listbox(listbox: Listbox, names: list[str], select: str | None = None):
-    listbox.delete(0, END)
+def _refresh_tree(tree: ttk.Treeview, names: list[str], select: str | None = None):
+    tree.delete(*tree.get_children())
     for name in names:
-        listbox.insert(END, name)
+        tree.insert("", "end", iid=name, text=name)
     if select is not None and select in names:
-        idx = names.index(select)
-        listbox.selection_set(idx)
-        listbox.see(idx)
+        tree.selection_set(select)
+        tree.see(select)
 
 
 def _prompt_unique_name(
@@ -72,6 +72,14 @@ def _prompt_unique_name(
     return name
 
 
+def _build_error_label(window: Toplevel, error_var: StringVar) -> ttk.Label:
+    style = ttk.Style()
+    style.configure("Error.TLabel", foreground=ERROR_TEXT_COLOR)
+    label = ttk.Label(window, textvariable=error_var, style="Error.TLabel")
+    label.pack(side=TOP, fill=X, padx=8)
+    return label
+
+
 def open_options_editor(
     tk: Tk, config: Config, config_path: str, on_saved: Callable[[], None]
 ):
@@ -83,13 +91,15 @@ def open_options_editor(
     window.transient(tk)
     window.grab_set()
 
-    dims_frame = Frame(window)
+    dims_frame = ttk.Frame(window)
     dims_frame.pack(side=TOP, fill=X, padx=8, pady=8)
-    Label(dims_frame, text="Window size (WIDTHxHEIGHT):").pack(side=LEFT)
+    ttk.Label(dims_frame, text="Window size (WIDTHxHEIGHT):").pack(side=LEFT)
     dimensions_var = StringVar(value=working.dimensions)
-    Entry(dims_frame, textvariable=dimensions_var, width=16).pack(side=LEFT, padx=8)
+    ttk.Entry(dims_frame, textvariable=dimensions_var, width=16).pack(
+        side=LEFT, padx=8
+    )
 
-    body = Frame(window)
+    body = ttk.Frame(window)
     body.pack(side=TOP, fill=BOTH, expand=True)
 
     selected_mode: list[str | None] = [None]
@@ -147,30 +157,32 @@ def open_options_editor(
         on_select_mode(new_name)
         refresh_default_menu()
 
-    mode_listbox = _build_listbox_crud(
+    mode_tree = _build_tree_crud(
         body, on_select_mode, on_add_mode, on_remove_mode, on_rename_mode
     )
 
     def refresh_modes(select: str | None = None):
-        _refresh_listbox(mode_listbox, list(working.mode.keys()), select)
+        _refresh_tree(mode_tree, list(working.mode.keys()), select)
 
-    form_frame = Frame(body)
+    form_frame = ttk.Frame(body)
     form_frame.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
 
     manual_var = BooleanVar(value=False)
-    Checkbutton(form_frame, text="Manual (click to advance)", variable=manual_var).pack(
-        anchor=W
+    ttk.Checkbutton(
+        form_frame, text="Manual (click to advance)", variable=manual_var
+    ).pack(anchor=W)
+
+    ttk.Label(form_frame, text="Timers (e.g. '3*30s 2m 5m'):").pack(
+        anchor=W, pady=(8, 0)
     )
-
-    Label(form_frame, text="Timers (e.g. '3*30s 2m 5m'):").pack(anchor=W, pady=(8, 0))
     timers_var = StringVar(value="")
-    Entry(form_frame, textvariable=timers_var, width=40).pack(anchor=W)
+    ttk.Entry(form_frame, textvariable=timers_var, width=40).pack(anchor=W)
 
-    Label(form_frame, text="Default mode:").pack(anchor=W, pady=(16, 0))
+    ttk.Label(form_frame, text="Default mode:").pack(anchor=W, pady=(16, 0))
     default_var = StringVar(
         value=next((n for n, m in working.mode.items() if m.default), "")
     )
-    default_menu_container = Frame(form_frame)
+    default_menu_container = ttk.Frame(form_frame)
     default_menu_container.pack(anchor=W)
 
     def refresh_default_menu():
@@ -178,16 +190,16 @@ def open_options_editor(
             child.destroy()
         names = list(working.mode.keys())
         if not names:
-            Label(default_menu_container, text="(no modes)").pack()
+            ttk.Label(default_menu_container, text="(no modes)").pack()
             return
         if default_var.get() not in names:
             default_var.set(names[0])
-        OptionMenu(default_menu_container, default_var, *names).pack()
+        ttk.OptionMenu(
+            default_menu_container, default_var, default_var.get(), *names
+        ).pack()
 
     error_var = StringVar(value="")
-    Label(window, textvariable=error_var, fg=ERROR_TEXT_COLOR).pack(
-        side=TOP, fill=X, padx=8
-    )
+    _build_error_label(window, error_var)
 
     def on_save():
         commit_form()
@@ -214,17 +226,19 @@ def open_options_editor(
         window.destroy()
         on_saved()
 
-    button_frame = Frame(window)
+    button_frame = ttk.Frame(window)
     button_frame.pack(side=BOTTOM, fill=X, padx=8, pady=8)
-    Button(button_frame, text="Cancel", command=window.destroy).pack(side=RIGHT, padx=4)
-    Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
+    ttk.Button(button_frame, text="Cancel", command=window.destroy).pack(
+        side=RIGHT, padx=4
+    )
+    ttk.Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
 
     refresh_modes()
     refresh_default_menu()
     if working.mode:
         first = next(iter(working.mode.keys()))
-        mode_listbox.selection_set(0)
         on_select_mode(first)
+        mode_tree.selection_set(first)
 
 
 def open_imageset_editor(
@@ -241,14 +255,20 @@ def open_imageset_editor(
     notebook = ttk.Notebook(window)
     notebook.pack(side=TOP, fill=BOTH, expand=True)
 
-    imageset_tab = Frame(notebook)
-    category_tab = Frame(notebook)
+    imageset_tab = ttk.Frame(notebook)
+    category_tab = ttk.Frame(notebook)
     notebook.add(imageset_tab, text="Imagesets")
     notebook.add(category_tab, text="Categories")
 
     # --- Imagesets tab ---
 
     selected_imageset: list[str | None] = [None]
+    imageset_paths: list[str] = []
+
+    def refresh_paths_tree():
+        imageset_paths_tree.delete(*imageset_paths_tree.get_children())
+        for idx, path in enumerate(imageset_paths):
+            imageset_paths_tree.insert("", "end", iid=str(idx), text=path)
 
     def commit_imageset_form():
         name = selected_imageset[0]
@@ -258,19 +278,20 @@ def open_imageset_editor(
         imageset.tags = [
             tag.strip() for tag in imageset_tags_var.get().split(",") if tag.strip()
         ]
-        imageset.paths = list(imageset_paths_listbox.get(0, END))
+        imageset.paths = list(imageset_paths)
 
     def on_select_imageset(name: str | None):
         commit_imageset_form()
         selected_imageset[0] = name
-        imageset_paths_listbox.delete(0, END)
+        imageset_paths.clear()
         if name is None:
             imageset_tags_var.set("")
+            refresh_paths_tree()
             return
         imageset = working.imageset[name]
         imageset_tags_var.set(", ".join(imageset.tags))
-        for path in imageset.paths:
-            imageset_paths_listbox.insert(END, path)
+        imageset_paths.extend(imageset.paths)
+        refresh_paths_tree()
 
     def on_add_imageset():
         name = _prompt_unique_name(
@@ -301,7 +322,7 @@ def open_imageset_editor(
         refresh_imagesets(select=new_name)
         on_select_imageset(new_name)
 
-    imageset_listbox = _build_listbox_crud(
+    imageset_tree = _build_tree_crud(
         imageset_tab,
         on_select_imageset,
         on_add_imageset,
@@ -310,37 +331,42 @@ def open_imageset_editor(
     )
 
     def refresh_imagesets(select: str | None = None):
-        _refresh_listbox(imageset_listbox, list(working.imageset.keys()), select)
+        _refresh_tree(imageset_tree, list(working.imageset.keys()), select)
 
-    imageset_form = Frame(imageset_tab)
+    imageset_form = ttk.Frame(imageset_tab)
     imageset_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
 
-    Label(imageset_form, text="Tags (comma-separated):").pack(anchor=W)
+    ttk.Label(imageset_form, text="Tags (comma-separated):").pack(anchor=W)
     imageset_tags_var = StringVar(value="")
-    Entry(imageset_form, textvariable=imageset_tags_var, width=44).pack(anchor=W)
+    ttk.Entry(imageset_form, textvariable=imageset_tags_var, width=44).pack(anchor=W)
 
-    Label(imageset_form, text="Folders:").pack(anchor=W, pady=(8, 0))
-    imageset_paths_listbox = Listbox(imageset_form, width=54, height=10)
-    imageset_paths_listbox.pack(anchor=W)
+    ttk.Label(imageset_form, text="Folders:").pack(anchor=W, pady=(8, 0))
+    imageset_paths_tree = ttk.Treeview(
+        imageset_form, show="tree", selectmode="browse", height=10
+    )
+    imageset_paths_tree.column("#0", width=480)
+    imageset_paths_tree.pack(anchor=W)
 
     def on_add_folder():
         path = filedialog.askdirectory(parent=window)
         if path:
-            imageset_paths_listbox.insert(END, path)
+            imageset_paths.append(path)
+            refresh_paths_tree()
 
     def on_remove_folder():
-        selection = imageset_paths_listbox.curselection()
+        selection = imageset_paths_tree.selection()
         if selection:
-            imageset_paths_listbox.delete(selection[0])
+            del imageset_paths[int(selection[0])]
+            refresh_paths_tree()
 
-    path_button_frame = Frame(imageset_form)
+    path_button_frame = ttk.Frame(imageset_form)
     path_button_frame.pack(anchor=W, pady=4)
-    Button(path_button_frame, text="Add folder...", command=on_add_folder).pack(
+    ttk.Button(path_button_frame, text="Add folder...", command=on_add_folder).pack(
         side=LEFT, padx=2
     )
-    Button(path_button_frame, text="Remove selected", command=on_remove_folder).pack(
-        side=LEFT, padx=2
-    )
+    ttk.Button(
+        path_button_frame, text="Remove selected", command=on_remove_folder
+    ).pack(side=LEFT, padx=2)
 
     # --- Categories tab ---
 
@@ -391,7 +417,7 @@ def open_imageset_editor(
         refresh_categories(select=new_name)
         on_select_category(new_name)
 
-    category_listbox = _build_listbox_crud(
+    category_tree = _build_tree_crud(
         category_tab,
         on_select_category,
         on_add_category,
@@ -400,19 +426,17 @@ def open_imageset_editor(
     )
 
     def refresh_categories(select: str | None = None):
-        _refresh_listbox(category_listbox, list(working.category.keys()), select)
+        _refresh_tree(category_tree, list(working.category.keys()), select)
 
-    category_form = Frame(category_tab)
+    category_form = ttk.Frame(category_tab)
     category_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
 
-    Label(category_form, text="Tags (comma-separated):").pack(anchor=W)
+    ttk.Label(category_form, text="Tags (comma-separated):").pack(anchor=W)
     category_tags_var = StringVar(value="")
-    Entry(category_form, textvariable=category_tags_var, width=44).pack(anchor=W)
+    ttk.Entry(category_form, textvariable=category_tags_var, width=44).pack(anchor=W)
 
     error_var = StringVar(value="")
-    Label(window, textvariable=error_var, fg=ERROR_TEXT_COLOR).pack(
-        side=TOP, fill=X, padx=8
-    )
+    _build_error_label(window, error_var)
 
     def on_save():
         commit_imageset_form()
@@ -423,18 +447,20 @@ def open_imageset_editor(
         window.destroy()
         on_saved()
 
-    button_frame = Frame(window)
+    button_frame = ttk.Frame(window)
     button_frame.pack(side=BOTTOM, fill=X, padx=8, pady=8)
-    Button(button_frame, text="Cancel", command=window.destroy).pack(side=RIGHT, padx=4)
-    Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
+    ttk.Button(button_frame, text="Cancel", command=window.destroy).pack(
+        side=RIGHT, padx=4
+    )
+    ttk.Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
 
     refresh_imagesets()
     refresh_categories()
     if working.imageset:
         first = next(iter(working.imageset.keys()))
-        imageset_listbox.selection_set(0)
         on_select_imageset(first)
+        imageset_tree.selection_set(first)
     if working.category:
         first = next(iter(working.category.keys()))
-        category_listbox.selection_set(0)
         on_select_category(first)
+        category_tree.selection_set(first)
