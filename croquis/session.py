@@ -154,6 +154,7 @@ class SessionApp:
     def go_to_image(self, new_index: int) -> bool:
         if new_index < 0:
             return False
+        previous_index = self.index
         self.index = min(max(SessionApp.NOT_SET, new_index), len(self.imageset))
 
         if new_index >= len(self.imageset):
@@ -174,7 +175,7 @@ class SessionApp:
 
         path, time, is_mirrored = self.imageset[new_index]
 
-        if new_index != self.timer:
+        if new_index != previous_index:
             self.timer = time
 
         self.canvas.itemconfigure(

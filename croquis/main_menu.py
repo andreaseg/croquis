@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Iterable
 from tkinter import *
 import random
 
@@ -26,20 +26,15 @@ class MainMenuApp:
         self.picked_imageset: str | None = None
         self.picked_mode: str | None = None
         self.menu_widget: int | None = None
-        self.image_resize = None
 
         self.main_menu_callback = main_menu_callback
 
         self.imageset_buttons: dict[str, Button] = {}
         self.mode_buttons: dict[str, Button] = {}
-        self.imageset_path: dict[str, LabelFrame] = {}
-        self.mode_description: dict[str, LabelFrame] = {}
 
         self.width, self.height = geometry
 
         tk.title("Croquis")
-
-        tk.bind("<ButtonRelease-1>", self.left_click)
         tk.bind("<Configure>", lambda e: self.configure(e))
 
     def delete_children(self):
@@ -48,42 +43,58 @@ class MainMenuApp:
     def select_imageset(self, name: str):
         print("imageset", name)
         self.picked_imageset = name
-        for imagesetname, button_widget in self.imageset_buttons.items():
-            if imagesetname == name:
-                background = SELECTED_OPTION_BUTTON_COLOR
-            else:
-                background = UNSELECTED_OPTION_BUTTON_COLOR
+        self._highlight(self.imageset_buttons, name)
 
-            button_widget.config(bg=background)
-
-        for imagesetname, path_widgets in self.imageset_path.items():
-            if imagesetname == name:
-                path_widgets.pack()
-            else:
-                path_widgets.pack_forget()
+        imageset = self.imagesets[name]
+        self.imageset_tags_label.config(text=", ".join(sort_tags(imageset.tags)))
+        self.imageset_paths_label.config(text="\n".join(imageset.paths))
 
     def select_mode(self, name: str):
         print("mode", name)
         self.picked_mode = name
+        self._highlight(self.mode_buttons, name)
 
-        for modename, mode_widget in self.mode_buttons.items():
-            if modename == name:
-                background = SELECTED_OPTION_BUTTON_COLOR
-            else:
-                background = UNSELECTED_OPTION_BUTTON_COLOR
+        header, body, total_time = self.modes[name].get_label()
+        self.mode_header_label.config(text=header)
+        self.mode_body_label.config(text=body)
+        self.mode_total_label.config(text=f"Total: {total_time}")
 
-            mode_widget.config(bg=background)
+    @staticmethod
+    def _highlight(buttons: dict[str, Button], selected: str):
+        for name, button in buttons.items():
+            background = (
+                SELECTED_OPTION_BUTTON_COLOR
+                if name == selected
+                else UNSELECTED_OPTION_BUTTON_COLOR
+            )
+            button.config(bg=background)
 
-        for modename, mode_desc_widget in self.mode_description.items():
-            if modename == name:
-                mode_desc_widget.pack()
-            else:
-                mode_desc_widget.pack_forget()
+    @staticmethod
+    def _build_button_column(
+        parent: Frame,
+        names: Iterable[str],
+        width: int,
+        height: int,
+        font,
+        on_select: Callable[[str], None],
+    ) -> dict[str, Button]:
+        buttons = {}
+        for idx, name in enumerate(names):
+            btn = Button(
+                parent,
+                text=name,
+                command=lambda x=name: on_select(x),
+                width=width,
+                height=height,
+                relief=FLAT,
+                font=font,
+            )
+            btn.grid(row=idx, column=0, sticky=W)
+            buttons[name] = btn
+        return buttons
 
     def draw_menu(self):
-        menu_frame = Frame(
-            self.tk, background=BACKGROUND_COLOR, width=1500, height=1200
-        )
+        menu_frame = Frame(self.tk, background=BACKGROUND_COLOR)
         menu_frame.pack(fill=BOTH, expand=True)
         self.menu_widget = self.canvas.create_window(
             12,
@@ -94,149 +105,91 @@ class MainMenuApp:
             height=self.height - 12,
         )
 
-        debug_frames = False
-
-        imageset_buttons_frame = Frame(
-            menu_frame,
-            width=MAIN_MENU_TABLE_COLS[0],
-            height=MAIN_MENU_TABLE_ROWS[0],
-            background="green" if debug_frames else BACKGROUND_COLOR,
-            border=0,
+        imageset_buttons_frame = self._table_cell(
+            menu_frame, MAIN_MENU_TABLE_COLS[0], MAIN_MENU_TABLE_ROWS[0], row=0, column=0
         )
-        imageset_buttons_frame.grid_propagate(False)
-        imageset_buttons_frame.grid(row=0, column=0, sticky=NW)
-
-        mode_buttons_frame = Frame(
-            menu_frame,
-            width=MAIN_MENU_TABLE_COLS[1],
-            height=MAIN_MENU_TABLE_ROWS[0],
-            background="red" if debug_frames else BACKGROUND_COLOR,
-            border=0,
+        mode_buttons_frame = self._table_cell(
+            menu_frame, MAIN_MENU_TABLE_COLS[1], MAIN_MENU_TABLE_ROWS[0], row=0, column=1
         )
-        mode_buttons_frame.grid_propagate(False)
-        mode_buttons_frame.grid(row=0, column=1, sticky=NW)
-
-        imageset_description_frame = Frame(
-            menu_frame,
-            width=MAIN_MENU_TABLE_COLS[0],
-            height=MAIN_MENU_TABLE_ROWS[1],
-            background="blue" if debug_frames else BACKGROUND_COLOR,
-            border=0,
+        start_button_frame = self._table_cell(
+            menu_frame, MAIN_MENU_TABLE_COLS[2], MAIN_MENU_TABLE_ROWS[0], row=0, column=2
         )
-        imageset_description_frame.grid_propagate(False)
-        imageset_description_frame.grid(row=1, column=0, sticky=NW)
-
-        mode_description_frame = Frame(
-            menu_frame,
-            width=MAIN_MENU_TABLE_COLS[1] + MAIN_MENU_TABLE_COLS[2],
-            height=MAIN_MENU_TABLE_ROWS[1],
-            background="yellow" if debug_frames else BACKGROUND_COLOR,
-            border=0,
+        imageset_description_frame = self._table_cell(
+            menu_frame, MAIN_MENU_TABLE_COLS[0], MAIN_MENU_TABLE_ROWS[1], row=1, column=0
         )
-        mode_description_frame.grid_propagate(False)
-        mode_description_frame.grid(row=1, column=1, columnspan=2, sticky=NW)
-
-        start_button_frame = Frame(
+        mode_description_frame = self._table_cell(
             menu_frame,
-            width=MAIN_MENU_TABLE_COLS[2],
-            height=MAIN_MENU_TABLE_ROWS[0],
-            background="pink" if debug_frames else BACKGROUND_COLOR,
-            border=0,
+            MAIN_MENU_TABLE_COLS[1] + MAIN_MENU_TABLE_COLS[2],
+            MAIN_MENU_TABLE_ROWS[1],
+            row=1,
+            column=1,
+            columnspan=2,
         )
-        start_button_frame.grid_propagate(False)
-        start_button_frame.grid(row=0, column=2, sticky=NW)
 
-        for imageset_idx, (imagesetname, imageset) in enumerate(self.imagesets.items()):
-            btn = Button(
-                imageset_buttons_frame,
-                text=imagesetname,
-                command=lambda x=imagesetname: self.select_imageset(x),
-                width=MAIN_MENU_IMAGESET_BUTTON_WIDTH,
-                height=MAIN_MENU_IMAGESET_BUTTON_HEIGH,
-                relief=FLAT,
-                font=MAIN_MENU_IMAGESET_BUTTON_FONT,
-            )
-            self.imageset_buttons[imagesetname] = btn
-            btn.grid(row=imageset_idx, column=0, sticky=W)
+        self.imageset_buttons = self._build_button_column(
+            imageset_buttons_frame,
+            self.imagesets,
+            MAIN_MENU_IMAGESET_BUTTON_WIDTH,
+            MAIN_MENU_IMAGESET_BUTTON_HEIGH,
+            MAIN_MENU_IMAGESET_BUTTON_FONT,
+            self.select_imageset,
+        )
+        self.imageset_tags_label = Label(
+            imageset_description_frame,
+            font=("arial", 12, "bold"),
+            fg="#FFFFFF",
+            background=BACKGROUND_COLOR,
+            justify=LEFT,
+            anchor="w",
+        )
+        self.imageset_tags_label.grid(row=0, column=0, sticky=W)
+        self.imageset_paths_label = Label(
+            imageset_description_frame,
+            font="arial",
+            fg="#FFFFFF",
+            background=BACKGROUND_COLOR,
+            justify=LEFT,
+            anchor="w",
+        )
+        self.imageset_paths_label.grid(row=1, column=0, sticky=W)
 
-            text_frame = LabelFrame(
-                imageset_description_frame,
-                width=MAIN_MENU_TABLE_COLS[0] - 12,
-                height=MAIN_MENU_TABLE_ROWS[1],
-                background=BACKGROUND_COLOR,
-                border=0,
-            )
-            text_frame.grid_propagate(False)  # Disables resize from grid children
-            text_frame.grid(row=imageset_idx, column=0, sticky=W)
-            text_frame.pack_forget()
-            self.imageset_path[imagesetname] = text_frame
+        self.mode_buttons = self._build_button_column(
+            mode_buttons_frame,
+            self.modes,
+            MAIN_MENU_MODE_BUTTON_WIDTH,
+            MAIN_MENU_MODE_BUTTON_HEIGH,
+            MAIN_MENU_MODET_BUTTON_FONT,
+            self.select_mode,
+        )
+        self.mode_header_label = Label(
+            mode_description_frame,
+            font=("arial", 12, "bold"),
+            fg="#FFFFFF",
+            background=BACKGROUND_COLOR,
+            justify=LEFT,
+            anchor="w",
+        )
+        self.mode_header_label.grid(row=0, column=0, sticky=W)
+        self.mode_body_label = Label(
+            mode_description_frame,
+            font="arial",
+            fg="#FFFFFF",
+            background=BACKGROUND_COLOR,
+            justify=LEFT,
+            anchor="w",
+        )
+        self.mode_body_label.grid(row=1, column=0, sticky=W)
+        self.mode_total_label = Label(
+            mode_description_frame,
+            font="arial",
+            fg="#FFFFFF",
+            background=BACKGROUND_COLOR,
+            justify=LEFT,
+            anchor="w",
+        )
+        self.mode_total_label.grid(row=2, column=0, sticky=W)
 
-            Label(
-                text_frame,
-                font=("arial", 12, "bold"),
-                text=", ".join(sort_tags(imageset.tags)),
-                fg="#FFFFFF",
-                background=BACKGROUND_COLOR,
-            ).grid(row=0, column=0, sticky=W)
-
-            for path_idx, path in enumerate(imageset.paths):
-                Label(
-                    text_frame,
-                    font="arial",
-                    text=path,
-                    fg="#FFFFFF",
-                    background=BACKGROUND_COLOR,
-                ).grid(row=path_idx + 1, column=0, sticky=W)
-
-        for mode_idx, (modename, mode) in enumerate(self.modes.items()):
-            btn = Button(
-                mode_buttons_frame,
-                text=modename,
-                command=lambda x=modename: self.select_mode(x),
-                width=MAIN_MENU_MODE_BUTTON_WIDTH,
-                height=MAIN_MENU_MODE_BUTTON_HEIGH,
-                relief=FLAT,
-                font=MAIN_MENU_MODET_BUTTON_FONT,
-            )
-            self.mode_buttons[modename] = btn
-            btn.grid(row=mode_idx, column=0, sticky=W)
-
-            label_header, label_body, label_time = mode.get_label()
-            text_frame = LabelFrame(
-                mode_description_frame,
-                width=MAIN_MENU_TABLE_COLS[1] + MAIN_MENU_TABLE_COLS[2],
-                height=MAIN_MENU_TABLE_ROWS[1],
-                background=BACKGROUND_COLOR,
-                border=0,
-            )
-            text_frame.grid_propagate(False)  # Disables resize from grid children
-            text_frame.pack_forget()
-            self.mode_description[modename] = text_frame
-
-            Label(
-                text_frame,
-                font=("arial", 12, "bold"),
-                text=label_header,
-                fg="#FFFFFF",
-                background=BACKGROUND_COLOR,
-            ).grid(row=0, column=0, sticky=W)
-            Label(
-                text_frame,
-                font="arial",
-                text=label_body,
-                # wraplength=20,
-                fg="#FFFFFF",
-                background=BACKGROUND_COLOR,
-            ).grid(row=1, column=0, sticky=W)
-            Label(
-                text_frame,
-                font="arial",
-                text="Total: " + label_time,
-                fg="#FFFFFF",
-                background=BACKGROUND_COLOR,
-            ).grid(row=2, column=0, sticky=W)
-
-        btn = Button(
+        Button(
             start_button_frame,
             text=MAIN_MENU_START_BUTTON_TEXT,
             command=lambda: self.start_session(self.picked_imageset, self.picked_mode),
@@ -244,27 +197,16 @@ class MainMenuApp:
             height=MAIN_MENU_START_BUTTON_HEIGHT,
             relief=FLAT,
             font=MAIN_MENU_START_BUTTON_FONT,
-        )
-        # btn = RoundedButton(
-        #    start_button_frame,
-        #    text=MAIN_MENU_START_BUTTON_TEXT,
-        #    command=lambda: self.start_session(self.picked_imageset, self.picked_mode),
-        #    width=200,
-        #    height=40,
-        #    font=MAIN_MENU_START_BUTTON_FONT,
-        #   bg=BACKGROUND_COLOR,
-        #    color="#00FF00",
-        #    border_color="#0000FF",
-        #    border=2,
-        #    cornerradius=16,
-        #    padding=0
-        # )
-        # btn.grid(row=0, column=0, sticky=W)
-        btn.pack()
-        self.start_widget = id
+        ).pack()
 
-    def left_click(self, event):
-        self.image_resize = event
+    @staticmethod
+    def _table_cell(
+        parent: Frame, width: int, height: int, row: int, column: int, columnspan: int = 1
+    ) -> Frame:
+        frame = Frame(parent, width=width, height=height, background=BACKGROUND_COLOR, border=0)
+        frame.grid_propagate(False)
+        frame.grid(row=row, column=column, columnspan=columnspan, sticky=NW)
+        return frame
 
     def configure(self, event):
         width = self.tk.winfo_width()
@@ -275,10 +217,12 @@ class MainMenuApp:
             and width > 256
             and height > 256
         ):
-            print(f"Resize to {width}x{height}")
             self.width = width
             self.height = height
-            # TODO self.draw_menu()
+            if self.menu_widget:
+                self.canvas.itemconfigure(
+                    self.menu_widget, width=width - 12, height=height - 12
+                )
 
     def start_session(self, picked_imageset: str | None, picked_mode: str | None):
         try:
@@ -313,9 +257,9 @@ def start_main_menu(
 
     app = MainMenuApp(tk, canvas, imagesets, modes, dimensions, callback)
     app.draw_menu()
-    for modename, mode in modes.items():
-        if mode.default:
-            app.select_mode(modename)
-        break
+
+    default_mode = next((name for name, mode in modes.items() if mode.default), None)
+    if default_mode:
+        app.select_mode(default_mode)
 
     app.select_imageset(random.choice(list(imagesets.keys())))
