@@ -1,0 +1,100 @@
+import pytest
+
+from croquis.model import (
+    Category,
+    Config,
+    ImageSet,
+    Mode,
+    imagesets_matching_category,
+    load_config,
+    merge_imagesets,
+    replace_config_fields,
+    save_config,
+)
+
+
+def make_config():
+    return Config(
+        dimensions="800x600",
+        imageset={
+            "a": {"tags": ["male", "figure"], "paths": ["images/a"]},
+            "b": {"tags": ["female", "figure"], "paths": ["images/b"]},
+            "c": {"tags": ["hands"], "paths": ["images/c"]},
+        },
+        mode={
+            "Classic": {"timers": "3*30s 1m", "default": "True"},
+            "Classroom": {"manual": "True"},
+        },
+        category={"Figure": {"tags": ["figure"]}},
+    )
+
+
+def test_save_load_round_trip(tmp_path):
+    config = make_config()
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+
+
+def test_imagesets_matching_category_superset_match():
+    config = make_config()
+    matches = imagesets_matching_category(config.imageset, config.category["Figure"])
+    assert set(matches.keys()) == {"a", "b"}
+
+
+def test_imagesets_matching_category_no_match():
+    config = make_config()
+    matches = imagesets_matching_category(
+        config.imageset, Category(tags=["nonexistent"])
+    )
+    assert matches == {}
+
+
+def test_imagesets_matching_category_empty_tags_matches_everything():
+    config = make_config()
+    matches = imagesets_matching_category(config.imageset, Category(tags=[]))
+    assert set(matches.keys()) == {"a", "b", "c"}
+
+
+def test_merge_imagesets_unions_tags_and_paths():
+    merged = merge_imagesets(
+        [
+            ImageSet(tags=["male", "figure"], paths=["images/a"]),
+            ImageSet(tags=["female", "figure"], paths=["images/b"]),
+        ]
+    )
+    assert sorted(merged.tags) == ["female", "figure", "male"]
+    assert sorted(merged.paths) == ["images/a", "images/b"]
+
+
+def test_merge_imagesets_single_imageset_is_identity():
+    imageset = ImageSet(tags=["hands"], paths=["images/c"])
+    merged = merge_imagesets([imageset])
+    assert sorted(merged.tags) == sorted(imageset.tags)
+    assert sorted(merged.paths) == sorted(imageset.paths)
+
+
+def test_merge_imagesets_empty_returns_empty_imageset():
+    merged = merge_imagesets([])
+    assert merged == ImageSet(tags=[], paths=[])
+
+
+def test_replace_config_fields_mutates_target_in_place():
+    target = make_config()
+    source = make_config()
+    source.dimensions = "1024x768"
+    source.imageset["d"] = ImageSet(tags=["new"], paths=["images/d"])
+
+    replace_config_fields(target, source)
+
+    assert target.dimensions == "1024x768"
+    assert "d" in target.imageset
+
+
+def test_mode_get_label_raises_without_manual_or_timers():
+    mode = Mode(timers="", default=False, manual=False)
+    with pytest.raises(ValueError):
+        mode.get_label()

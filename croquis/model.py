@@ -1,6 +1,8 @@
 import re
+import toml
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from typing import Iterable
 from .util import parse_bool, format_time, sort_tags
 
 import croquis.util
@@ -38,6 +40,8 @@ class Mode:
 
             return "Timed", timers, format_time(s)
 
+        raise ValueError("Mode must be manual or have timers set")
+
 
 @dataclass
 class Config:
@@ -53,3 +57,34 @@ class Config:
 
     def tags(self) -> list[str]:
         return sort_tags({tag for imageset in self.imageset.values() for tag in imageset.tags})
+
+
+def imagesets_matching_category(
+    imagesets: dict[str, ImageSet], category: Category
+) -> dict[str, ImageSet]:
+    return {
+        name: imageset
+        for name, imageset in imagesets.items()
+        if set(category.tags).issubset(set(imageset.tags))
+    }
+
+
+def merge_imagesets(imagesets: Iterable[ImageSet]) -> ImageSet:
+    imagesets = list(imagesets)
+    tags = {tag for imageset in imagesets for tag in imageset.tags}
+    paths = {path for imageset in imagesets for path in imageset.paths}
+    return ImageSet(tags=list(tags), paths=list(paths))
+
+
+def load_config(path: str) -> Config:
+    with open(path, mode="r") as f:
+        return Config(**toml.loads(f.read()))
+
+
+def save_config(config: Config, path: str) -> None:
+    with open(path, mode="w") as f:
+        toml.dump(asdict(config), f)
+
+
+def replace_config_fields(target: Config, source: Config) -> None:
+    target.__dict__.update(source.__dict__)

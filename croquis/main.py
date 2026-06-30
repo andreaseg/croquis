@@ -1,5 +1,4 @@
 from tkinter import *
-import toml
 import sys
 import os
 
@@ -9,6 +8,9 @@ from croquis.session import start_session
 from croquis.main_menu import start_main_menu
 from croquis.error_modal import show_error_modal
 from croquis.model import *
+from croquis.config_editor import open_options_editor, open_imageset_editor
+
+CONFIG_PATH = "config.toml"
 
 
 def start():
@@ -18,13 +20,12 @@ def start():
         show_error_modal(e)
 
 def _start():
-    if not os.path.exists("config.toml"):
+    if not os.path.exists(CONFIG_PATH):
         print("No config.toml found, generating example configuration")
-        with open("config.toml", mode="w") as f:
+        with open(CONFIG_PATH, mode="w") as f:
             f.write(DEFAULT_CONFIG)
 
-    with open("config.toml", mode="r") as f:
-        config = Config(**toml.loads(f.read()))
+    config = load_config(CONFIG_PATH)
 
     print("Modes:")
     for mode_name, mode in config.mode.items():
@@ -43,26 +44,6 @@ def _start():
     print("All tags:")
     for tag in config.tags():
         print(f"  - {tag}")
-
-    print("Virtual imagesets:")
-    imageset_copy = config.imageset
-    config.imageset = {}
-    for category_name, category in config.category.items():
-        print(f" {category_name}")
-        imagesets = {imageset_name: imageset for imageset_name, imageset in imageset_copy.items() if set(category.tags).issubset(set(imageset.tags)) }
-        for imageset in imagesets:
-            print(f"  - {imageset}")
-        paths = {
-            path for imageset in imagesets.values() for path in imageset.paths
-        }
-        tags = {
-            tag for imageset in imagesets.values() for tag in imageset.tags
-        }
-        if paths:
-            config.imageset[category_name] = ImageSet(
-                tags,
-                paths
-            )
 
     if len(sys.argv) == 2:
         _, picked_session = sys.argv
@@ -85,14 +66,24 @@ def _start():
     canvas = Canvas(tk, width=width, height=height, background=BACKGROUND_COLOR)
     canvas.pack(fill="both", expand=True)
 
+    current_screen = [None]
+
     def select_state(action: str):
+        current_screen[0] = action
+
         if action == "session":
-            if not picked_session in config.imageset:
+            if picked_session in config.imageset:
+                session = config.imageset[picked_session]
+            elif picked_session in config.category:
+                matches = imagesets_matching_category(
+                    config.imageset, config.category[picked_session]
+                )
+                session = merge_imagesets(matches.values())
+            else:
                 raise Exception(
-                    f"Session '{picked_session}' not configured, add [session.{picked_session}] to config.toml"
+                    f"'{picked_session}' not configured, add [imageset.{picked_session}] or [category.{picked_session}] to config.toml"
                 )
 
-            session = config.imageset[picked_session]
             mode = config.mode[picked_mode]
             paths = session.paths
 
@@ -124,12 +115,28 @@ def _start():
                 canvas,
                 config.imageset,
                 config.mode,
+                config.category,
                 (width, height),
                 callback=select_state,
             )
 
         else:
             raise Exception(f"Unknow action type '{action}'")
+
+    def on_config_saved():
+        if current_screen[0] == "main_menu":
+            select_state("main_menu")
+
+    menu_bar = Menu(tk)
+    menu_bar.add_command(
+        label="Options...",
+        command=lambda: open_options_editor(tk, config, CONFIG_PATH, on_config_saved),
+    )
+    menu_bar.add_command(
+        label="Configure Images...",
+        command=lambda: open_imageset_editor(tk, config, CONFIG_PATH, on_config_saved),
+    )
+    tk.config(menu=menu_bar)
 
     select_state(action)
 

@@ -10,9 +10,14 @@ controls.
 - **Timed sessions** — e.g. "4×30s, 3×1m, 2×2m, 2×3m, 1×5m" — images advance automatically.
 - **Manual / classroom mode** — no timer, click or press the right arrow to advance.
 - **Image sets** — group reference images by folder, tag them (e.g. `male`, `portrait`,
-  `hands`), and mix and match at session start.
-- **Categories** — virtual image sets built automatically from tags, so e.g. a "Figure"
-  category can pull from every image set tagged `figure` without duplicating paths.
+  `hands`), and check as many as you like before starting a session — paths and tags
+  from every checked image set are pooled together.
+- **Categories** — one-click presets: clicking a category checks every image set whose
+  tags match it, so e.g. a "Figure" category can select every image set tagged `figure`
+  without checking each one by hand. You can still fine-tune the selection afterward.
+- **In-app configuration** — add/edit/remove image sets, categories, modes, and the
+  window size from the **Options...** / **Configure Images...** menu, no need to hand-edit
+  `config.toml`.
 - **Pause, skip back/forward, random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 
@@ -40,13 +45,19 @@ make run
 ```sh
 croquis                          # opens the main menu
 croquis "Portrait Male"          # starts that image set immediately, using the default mode
-croquis "Portrait Male" Classic  # starts that image set with a specific mode
+croquis Portrait Classic         # also accepts a category name, with a specific mode
 ```
 
-## Configuring `config.toml`
+## Configuring
 
-`config.toml` lives next to the executable (or in the repo root when running from source)
-and is not checked into git — every artist's image library is different. Example:
+The easiest way to add image sets, categories, and modes, or change the window size, is
+the in-app editor: open the **Options...** menu for the window size and modes, or
+**Configure Images...** for image sets and categories. Changes save straight back to
+`config.toml` and apply immediately, no restart needed.
+
+You can still hand-edit `config.toml` directly if you prefer. It lives next to the
+executable (or in the repo root when running from source) and is not checked into git —
+every artist's image library is different. Example:
 
 ```toml
 dimensions = "1920x1200"
@@ -72,10 +83,11 @@ tags = ["portrait"]
   (`s`econds/`m`inutes, e.g. `"3*30s 2m"`) for a timed session, or `manual = "True"` for a
   click-to-advance session. Mark one mode `default = "True"` to preselect it in the menu.
 - **`[imageset.<name>]`** — a named group of reference images: a list of folder `paths`
-  (searched recursively) and `tags` describing what's in them.
-- **`[category.<name>]`** — a virtual image set assembled from every `[imageset]` whose
-  tags are a superset of the category's tags. Useful for "give me everything tagged
-  `figure`" without re-listing paths.
+  (searched recursively) and `tags` describing what's in them. Each one shows up as a
+  checkbox in the main menu; check as many as you want before starting a session.
+- **`[category.<name>]`** — a one-click preset button in the main menu: clicking it
+  checks every `[imageset]` whose tags are a superset of the category's tags. Useful for
+  "give me everything tagged `figure`" without checking each image set by hand.
 
 ## Building the executable
 

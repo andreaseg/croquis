@@ -16,6 +16,7 @@ poetry install --with dev   # install deps (Python 3.13–3.14, see pyproject.to
 poetry run croquis          # run from source (== make run)
 poetry run pytest           # run tests
 poetry run pytest croquis/tests/test_util.py::test_parse_timer  # single test
+poetry run pytest croquis/tests/test_model.py  # config/imageset/category helpers
 poetry run ruff format      # format (== make format)
 poetry run ruff check       # lint — expect a large pre-existing count from the
                              # wildcard-import style below; don't try to fix those
@@ -36,8 +37,12 @@ the two "screens" by drawing onto that same canvas — there are no separate win
 `<Configure>`/keyboard events on `tk` (binding replaces, not stacks, so only the active
 screen's handlers are live).
 
-- `croquis/main_menu.py` — `MainMenuApp`: pick an imageset + mode, "Start Session" hands
-  off to `session.start_session(...)`.
+- `croquis/main_menu.py` — `MainMenuApp`: check one or more imagesets (multi-select
+  checkboxes) + pick a mode, "Start Session" merges the checked imagesets'
+  tags/paths (`model.merge_imagesets`) and hands off to `session.start_session(...)`.
+  Category buttons are one-shot presets — clicking one replaces the current checkbox
+  selection with that category's matches (`model.imagesets_matching_category`); they
+  carry no persistent selection state of their own.
 - `croquis/session.py` — `SessionApp`: drives the actual timed/manual image sequence
   (`tick()` reschedules itself via `tk.after(1000, ...)`; `go_to_image(new_index)` is the
   single state-transition point — it's used both for advancing/going back *and* for
@@ -47,9 +52,13 @@ screen's handlers are live).
   first image" sentinel.
 - `croquis/model.py` — dataclasses for `config.toml`: `Config`, `Mode`, `ImageSet`,
   `Category`. Deserialization is hand-rolled in `__post_init__` (dict → dataclass), not a
-  library. **`Category` is just a tag spec** — the actual "virtual imageset" it expands to
-  (union of paths/tags from every real imageset whose tags are a superset of the
-  category's) is computed in `main.py:_start()`, not in `model.py`.
+  library; serialization is `save_config`/`load_config` (`dataclasses.asdict()` +
+  `toml.dump()`/`toml.loads()`, round-trips cleanly including bools). **`Category` is
+  just a tag spec, nothing more** — `config.imageset` always holds the real, raw
+  imagesets; `imagesets_matching_category()` and `merge_imagesets()` are pure helpers
+  used both by the CLI (resolving a category name passed as the session argument) and
+  by `MainMenuApp` (category-button presets, multi-select merge at session start). They
+  are never persisted back to `config.toml` — only `save_config` writes to disk.
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
   TOML template written out on first run).
 - `croquis/util.py` — config/timer parsing (`parse_timer`, `parse_bool`), image discovery
@@ -59,6 +68,15 @@ screen's handlers are live).
   and shown in a separate fatal-error Tk window (`show_error_modal`), then exits. If a
   change can throw during startup/event handlers, know that it surfaces here rather than
   a traceback in a console.
+- `croquis/config_editor.py` — `open_options_editor`/`open_imageset_editor`, opened from
+  a native `tk.Menu` bar set up in `main.py` (Options.../Configure Images...). Each opens
+  a modal `Toplevel` (standard Tk widgets — Listbox/Entry/Checkbutton/`ttk.Notebook`/
+  `filedialog`, not the canvas) that works on `copy.deepcopy(config)` so Cancel discards
+  cleanly; on Save it validates inline (an in-window error `Label`, never
+  `show_error_modal` — that calls `sys.exit`, which would kill the app over a typo),
+  calls `save_config`, then `model.replace_config_fields(config, working)` to commit the
+  validated copy into the live `Config` object `main.py` already holds by reference, then
+  an `on_saved` callback that re-enters `select_state("main_menu")` to redraw.
 
 **Codebase convention:** files use `from tkinter import *` / `from croquis.x import *`
 throughout (Tk constants like `FLAT`, `W`, `NW` are used unqualified). This is intentional
