@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: poetry
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run tests
+        run: poetry run pytest
+
+      - name: Build executable
+        run: poetry run build-exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: croquis-windows
+          path: dist/croquis.exe
+          retention-days: 30

@@ -44,12 +44,17 @@ timers = "30s 30s 30s 1m 1m 1m 2m 2m 5m 10m"
 manual = "True"
 
 [imageset.example1]
+tags = ["example"]
 paths = [
 #    "path-to-image-folder"
 ]
 
 [imageset.example2]
+tags = ["example"]
 paths = [
 #    "path-to-image-folder"
 ]
+
+[category.example]
+tags = ["example"]
 """.strip()
