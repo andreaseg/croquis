@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -34,3 +37,12 @@ jobs:
           name: croquis-windows
           path: dist/croquis.exe
           retention-days: 30
+
+      - name: Update latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          prerelease: true
+          body: Automatically built from the latest commit on main (${{ github.sha }}).
+          files: dist/croquis.exe
