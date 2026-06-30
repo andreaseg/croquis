@@ -1,0 +1,12 @@
+*.spec
+*.exe
+config.toml
+
+
+# Project files
+images
+build
+__pycache__
+.pytest_cache
+.ruff_cache
+dist

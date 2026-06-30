@@ -1,0 +1,28 @@
+[project]
+name = "croquis"
+version = "0.1.0"
+description = ""
+authors = []
+readme = "README.md"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+    "pillow~=12.0",
+    "toml~=0.10"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+croquis = "croquis.main:start"
+build-exe = "build:build_executable"
+
+[tool.ruff.lint]
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.1,<10.0.0)",
+    "ruff (>=0.14.6,<0.15.0)",
+    "pyinstaller (>=6.17.0,<7.0.0)"
+]
