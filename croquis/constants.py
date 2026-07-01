@@ -26,6 +26,22 @@ BUTTON_HEIGHT = 1
 BUTTON_EDGE_OFFSET = 8
 
 MAIN_MENU_START_BUTTON_TEXT = "Start Session"
+MAIN_MENU_MONOCHROME_TOGGLE_TEXT = "Monochrome"
+
+# ITU-R BT.601 perceptual luma weights - matches Pillow's own "L" (greyscale)
+# conversion, used both directly and as the basis for the sepia toning below.
+LUMA_WEIGHTS = (0.299, 0.587, 0.114)
+
+# A reference "sepia" brown. Only its ratios (relative to its own perceptual
+# luminance) matter - see monochrome.py - so this can be any warm brown that
+# looks right, the math guarantees the toning preserves perceptual brightness
+# regardless of which reference color is picked here.
+SEPIA_REFERENCE_COLOR = (112, 66, 20)
+
+# How strongly the sepia hue shows at full brightness (0 = pure greyscale,
+# 1 = fully saturated sepia at white). Kept low for a "slight" tint - shadows
+# stay neutral, only highlights pick up warmth, like graphite on paper.
+MONOCHROME_TINT_STRENGTH = 0.35
 
 # Grid weights for the main menu's responsive layout, not pixel sizes.
 # Columns: [imagesets, mode, start button]

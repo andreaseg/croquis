@@ -22,6 +22,10 @@ controls.
   paths can just be a folder name instead of a full path. The app's own directory is
   always searched too.
 - **Follows your OS light/dark theme** in the menu and config editor.
+- **Monochrome mode** — a toggle above "Start Session" that converts images to a
+  perceptual greyscale with a slight sepia tint (neutral in the shadows, warm in the
+  highlights, like graphite on paper), for practicing values without color as a
+  distraction.
 - **Pause, skip back/forward, random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 

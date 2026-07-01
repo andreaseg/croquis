@@ -29,6 +29,7 @@ class MainMenuApp:
         self.categories: dict[str, Category] = config.category
         self.picked_imagesets: set[str] = set()
         self.mode_var: StringVar = StringVar(value="")
+        self.monochrome_var: BooleanVar = BooleanVar(value=False)
         self.menu_frame: ttk.Frame | None = None
         self.menu_bar: Menu | None = None
 
@@ -217,15 +218,26 @@ class MainMenuApp:
         self.mode_total_label = ttk.Label(mode_description_frame, justify=LEFT)
         self.mode_total_label.grid(row=2, column=0, sticky=W)
 
+        start_button_group = ttk.Frame(start_button_frame)
+        start_button_group.pack(anchor=CENTER, expand=True)
+
+        ttk.Checkbutton(
+            start_button_group,
+            text=MAIN_MENU_MONOCHROME_TOGGLE_TEXT,
+            variable=self.monochrome_var,
+        ).pack(anchor=CENTER, pady=(0, 8))
+
         ttk.Button(
-            start_button_frame,
+            start_button_group,
             text=MAIN_MENU_START_BUTTON_TEXT,
             command=lambda: self.start_session(
-                self.picked_imagesets, self.mode_var.get()
+                self.picked_imagesets, self.mode_var.get(), self.monochrome_var.get()
             ),
-        ).pack(anchor=CENTER, expand=True)
+        ).pack(anchor=CENTER)
 
-    def start_session(self, picked_imagesets: set[str], picked_mode: str):
+    def start_session(
+        self, picked_imagesets: set[str], picked_mode: str, monochrome: bool = False
+    ):
         try:
             if not picked_imagesets or not picked_mode:
                 return
@@ -247,6 +259,7 @@ class MainMenuApp:
                 (self.tk.winfo_width(), self.tk.winfo_height()),
                 self.main_menu_callback,
                 self.config.image_locations,
+                monochrome,
             )
         except Exception as e:
             show_error_modal(e)

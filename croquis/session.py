@@ -5,17 +5,26 @@ from typing import Callable, Iterable
 from croquis.constants import *
 from croquis.util import *
 from croquis.model import *
+from croquis.monochrome import apply_monochrome
 
 
 class SessionApp:
     NOT_SET = -1
 
-    def __init__(self, tk: Tk, canvas: Canvas, title: str, geometry: tuple[int, int]):
+    def __init__(
+        self,
+        tk: Tk,
+        canvas: Canvas,
+        title: str,
+        geometry: tuple[int, int],
+        monochrome: bool = False,
+    ):
         self.tk = tk
         self.timer = SessionApp.NOT_SET
         self.is_paused = False
         self.is_manual = False
         self.has_ended = False
+        self.monochrome = monochrome
         self.index = SessionApp.NOT_SET
         self.imageset: list[tuple[str, int, bool]] | None = None
         self.canvas: Canvas | None = canvas
@@ -231,6 +240,8 @@ class SessionApp:
             img = Image.open(path)
             if mirror:
                 img = ImageOps.mirror(img)
+            if self.monochrome:
+                img = apply_monochrome(img)
             self._image_file = img
             print(f"Loaded image '{path}' with dimensions ({img.width},{img.height})")
             redraw = True
@@ -295,6 +306,7 @@ def start_session(
     dimensions: tuple[int, int],
     callback: Callable[[str], None],
     locations: Iterable[str] = (),
+    monochrome: bool = False,
 ):
     if mode.manual:
         manual_timer_placeholder = int(1)
@@ -316,7 +328,7 @@ def start_session(
                 f" - '{image_path}'{' (mirrored)' if is_flipped else ''} for {image_timer}s"
             )
 
-    app = SessionApp(tk, canvas, f"Croquis: {name}", dimensions)
+    app = SessionApp(tk, canvas, f"Croquis: {name}", dimensions, monochrome)
     app.imageset = image_paths
     app.main_menu_callback = callback
 

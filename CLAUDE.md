@@ -22,6 +22,7 @@ poetry run croquis          # run from source (== make run)
 poetry run pytest           # run tests
 poetry run pytest croquis/tests/test_util.py::test_parse_timer  # single test
 poetry run pytest croquis/tests/test_model.py  # config/imageset/category helpers
+poetry run pytest croquis/tests/test_monochrome.py  # greyscale/sepia transform
 poetry run ruff format      # format (== make format)
 poetry run ruff check       # lint — expect a large pre-existing count from the
                              # wildcard-import style below; don't try to fix those
@@ -57,10 +58,13 @@ the active screen's handlers are live).
   (`ttk.Radiobutton`s bound to one `StringVar` — native mutual-exclusion, no manual
   highlight-color toggling), "Start Session" merges the checked imagesets' tags/paths
   (`model.merge_imagesets`) and hands off to `session.start_session(...)`, passing
-  `self.config.image_locations` through for path resolution. Category buttons are
-  one-shot presets — clicking one replaces the current checkbox selection with that
-  category's matches (`model.imagesets_matching_category`); they carry no persistent
-  selection state of their own.
+  `self.config.image_locations` through for path resolution. A `ttk.Checkbutton`
+  ("Monochrome") above the Start Session button is a plain runtime `BooleanVar` on
+  `MainMenuApp`, not persisted to `config.toml` — it's read once when a session starts
+  and passed straight through to `session.start_session(..., monochrome=...)`. Category
+  buttons are one-shot presets — clicking one replaces the current checkbox selection
+  with that category's matches (`model.imagesets_matching_category`); they carry no
+  persistent selection state of their own.
 - `croquis/session.py` — `SessionApp`: drives the actual timed/manual image sequence
   (`tick()` reschedules itself via `tk.after(1000, ...)`; `go_to_image(new_index)` is the
   single state-transition point — it's used both for advancing/going back *and* for
@@ -71,7 +75,26 @@ the active screen's handlers are live).
   playback buttons are classic `tk.Button`s with explicit colors from `constants.py`,
   embedded via `canvas.create_window(...)` over the reference image; that's an
   intentional dark overlay aesthetic, not a "form," and explicit `background=`/`fg=`
-  kwargs make it immune to theme changes regardless.
+  kwargs make it immune to theme changes regardless. `load_image()` applies
+  `monochrome.apply_monochrome()` (if `self.monochrome`) in the same branch as the
+  mirror transform, i.e. once per image *load*, cached on `self._image_file` — not
+  once per resize-redraw, since it's deterministic and resizing reuses the cached,
+  already-transformed image.
+- `croquis/monochrome.py` — `apply_monochrome(image)`: perceptual greyscale (Pillow's
+  `.convert("L")`, i.e. the same BT.601 weights as `LUMA_WEIGHTS` in `constants.py`)
+  toned with a brightness-dependent sepia tint. The tint is built to preserve
+  perceptual luminance *by construction*, not by tuning: `SEPIA_REFERENCE_COLOR` is
+  normalized by its own BT.601 luminance into per-channel ratios, so blending grey
+  toward `ratio * L` at any strength keeps the blended color's luminance at exactly
+  `L` (a linear combination of two colors that each have luminance `L` also has
+  luminance `L` — this is why the reference color's exact hue doesn't matter, only
+  the ratios derived from it do). `MONOCHROME_TINT_STRENGTH` scales with `L` itself
+  (`strength = TINT_STRENGTH * L/255`), which is what gives the "neutral shadows, warm
+  highlights" look rather than a uniform tint. Bright channels do clip at 255 for very
+  light pixels (verified: the R channel starts clipping around `L≈221`, i.e. the top
+  ~13% of the range), which breaks exact luminance preservation right at the extreme
+  highlights — expected and visually fine (mimics real sepia photos blowing out
+  highlights), not a bug to fix.
 - `croquis/model.py` — dataclasses for `config.toml`: `Config`, `Mode`, `ImageSet`,
   `Category`. Deserialization is hand-rolled in `__post_init__` (dict → dataclass), not a
   library; serialization is `save_config`/`load_config` (`dataclasses.asdict()` +
