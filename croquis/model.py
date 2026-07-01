@@ -4,6 +4,7 @@ import toml
 from dataclasses import dataclass, asdict, field
 from typing import Iterable
 from .util import parse_bool, format_time, sort_tags
+from .constants import DEFAULT_KEYBINDINGS
 
 import croquis.util
 
@@ -50,6 +51,8 @@ class Config:
     mode: dict[str, Mode]
     category: dict[str, Category]
     image_locations: list[str] = field(default_factory=list)
+    keybindings: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_KEYBINDINGS))
+    excluded_images: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         self.imageset = {k: ImageSet(**v) for (k, v) in self.imageset.items()}

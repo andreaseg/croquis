@@ -98,3 +98,38 @@ def test_mode_get_label_raises_without_manual_or_timers():
     mode = Mode(timers="", default=False, manual=False)
     with pytest.raises(ValueError):
         mode.get_label()
+
+
+def test_keybindings_and_excluded_images_round_trip(tmp_path):
+    config = make_config()
+    config.keybindings = {"menu": "Escape", "prev": "a", "next": "d"}
+    config.excluded_images = ["c:\\images\\a\\1.jpg"]
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+
+
+def test_config_loads_with_defaults_when_keybindings_and_excluded_images_missing():
+    config = make_config()
+    data = {
+        "dimensions": config.dimensions,
+        "imageset": {
+            name: {"tags": imageset.tags, "paths": imageset.paths}
+            for name, imageset in config.imageset.items()
+        },
+        "mode": {
+            name: {"timers": mode.timers, "default": mode.default, "manual": mode.manual}
+            for name, mode in config.mode.items()
+        },
+        "category": {
+            name: {"tags": category.tags} for name, category in config.category.items()
+        },
+    }
+
+    loaded = Config(**data)
+
+    assert loaded.keybindings == {"menu": "Escape", "prev": "Left", "next": "Right"}
+    assert loaded.excluded_images == []

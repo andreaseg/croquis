@@ -19,14 +19,18 @@ class SessionApp:
         geometry: tuple[int, int],
         monochrome: bool = False,
         locations: Iterable[str] = (),
+        manual: bool = False,
+        keybindings: dict[str, str] | None = None,
+        on_exclude_image: Callable[[str], None] | None = None,
     ):
         self.tk = tk
         self.timer = SessionApp.NOT_SET
         self.is_paused = False
-        self.is_manual = False
+        self.is_manual = manual
         self.has_ended = False
         self.monochrome = monochrome
         self.locations = list(locations)
+        self.on_exclude_image = on_exclude_image or (lambda path: None)
         self.index = SessionApp.NOT_SET
         self.imageset: list[tuple[str, int, bool]] | None = None
         self.canvas: Canvas | None = canvas
@@ -38,8 +42,11 @@ class SessionApp:
         self.timer_widget: int | None = None
         self.timer_widget_shadow: int | None = None
         self.image_widget: int | None = None
-        self.pause_widget: int | None = None
-        self.play_widget: int | None = None
+        self.menu_button_widget: int | None = None
+        self.resume_button_widget: int | None = None
+        self.exclude_button_widget: int | None = None
+        self.extend_timer_button_widget: int | None = None
+        self.quit_button_widget: int | None = None
         self.prev_widget: int | None = None
         self.next_widget: int | None = None
         self.pause_background_widget: int | None = None
@@ -57,9 +64,16 @@ class SessionApp:
 
         tk.title(title)
 
-        tk.bind("<space>", lambda _e: self.pause_or_play())
-        tk.bind("<Left>", lambda _e: self.prev())
-        tk.bind("<Right>", lambda _e: self.next())
+        keybindings = keybindings or DEFAULT_KEYBINDINGS
+        tk.bind(f"<{keybindings['menu']}>", lambda _e: self.toggle_menu())
+        tk.bind("<space>", lambda _e: self.toggle_menu())
+        # Always (re)bind prev/next, even outside manual mode - a previous
+        # SessionApp on this same tk root may have bound these (bind()
+        # replaces per-sequence, it doesn't clear sequences a new session
+        # doesn't rebind), so skipping the bind here would leave a stale
+        # handler live. prev()/next() themselves no-op outside manual mode.
+        tk.bind(f"<{keybindings['prev']}>", lambda _e: self.prev())
+        tk.bind(f"<{keybindings['next']}>", lambda _e: self.next())
         tk.bind("<ButtonRelease-1>", self.left_click)
         tk.bind("<Configure>", lambda e: self.configure(e))
 
@@ -76,19 +90,12 @@ class SessionApp:
             self.tk.after(1000, self.tick)
 
     def update_timer_text(self):
-        if self.index >= len(self.imageset):
-            max_time = 999999999
-        else:
-            max_time = self.imageset[self.index][1]
-
         if (
             self.timer == SessionApp.NOT_SET
             or self.index >= len(self.imageset)
             or self.is_manual
         ):
             updated_text = ""
-        elif self.timer > max_time:
-            updated_text = f"{max_time}s"
         else:
             updated_text = f"{self.timer}s"
 
@@ -123,11 +130,6 @@ class SessionApp:
         self.canvas.coords(self.restart_widget, width / 2, height / 2 + 80)
         self.canvas.coords(self.pause_background_widget, 0, 0, width, height)
         self.canvas.coords(
-            self.pause_text_widget,
-            width / 2,
-            height / 2,
-        )
-        self.canvas.coords(
             self.path_widget_shadow,
             width - 12 + TEXT_SHADOW_OFFSET,
             height - 12 + TEXT_SHADOW_OFFSET,
@@ -149,8 +151,6 @@ class SessionApp:
             12 + TEXT_SHADOW_OFFSET,
         )
         self.canvas.coords(self.timer_widget, width / 2, 12)
-        self.canvas.coords(self.pause_widget, width / 2, height - BUTTON_EDGE_OFFSET)
-        self.canvas.coords(self.play_widget, width / 2, height - BUTTON_EDGE_OFFSET)
         self.canvas.coords(
             self.prev_widget,
             width / 2 - BUTTON_POSITION_OFFSET,
@@ -161,6 +161,26 @@ class SessionApp:
             width / 2 + BUTTON_POSITION_OFFSET,
             height - BUTTON_EDGE_OFFSET,
         )
+        self.canvas.coords(
+            self.pause_text_widget, width / 2, height / 2 + MENU_TITLE_Y_OFFSET
+        )
+        self.reposition_menu_buttons()
+
+    def reposition_menu_buttons(self):
+        # Only the buttons actually shown by open_menu() get a slot, in
+        # display order - so a mode without Extend Timer (manual sessions)
+        # doesn't leave a gap where that button would've been.
+        buttons = [self.resume_button_widget, self.exclude_button_widget]
+        if not self.is_manual:
+            buttons.append(self.extend_timer_button_widget)
+        buttons.append(self.quit_button_widget)
+
+        for i, widget in enumerate(buttons):
+            self.canvas.coords(
+                widget,
+                self.width / 2,
+                self.height / 2 + MENU_BUTTON_Y_OFFSET + i * MENU_BUTTON_SPACING,
+            )
 
     def go_to_image(self, new_index: int) -> bool:
         if new_index < 0:
@@ -190,11 +210,9 @@ class SessionApp:
             self.timer = time
 
         display_path = shorten_to_location(path, self.locations)
-        self.canvas.itemconfigure(
-            self.path_widget,
-            text=f"{display_path}{' (mirrored)' if is_mirrored else ''}",
-        )
-        self.canvas.itemconfigure(self.path_widget_shadow, text=display_path)
+        display_text = f"{display_path}{' (mirrored)' if is_mirrored else ''}"
+        self.canvas.itemconfigure(self.path_widget, text=display_text)
+        self.canvas.itemconfigure(self.path_widget_shadow, text=display_text)
         progress_text = f"{self.index + 1}/{len(self.imageset)}"
         self.canvas.itemconfigure(self.progress_widget, text=progress_text)
         self.canvas.itemconfigure(self.progress_widget_shadow, text=progress_text)
@@ -204,23 +222,60 @@ class SessionApp:
 
         return True
 
-    def pause_or_play(self):
+    def toggle_menu(self):
+        if self.index >= len(self.imageset):
+            return  # session already ended, nothing to pause/menu for
         if self.is_paused:
-            print("PLAY")
-            self.canvas.itemconfigure(self.pause_widget, state=NORMAL)
-            self.canvas.itemconfigure(self.play_widget, state=HIDDEN)
-            self.canvas.itemconfigure(self.pause_background_widget, state=HIDDEN)
-            self.canvas.itemconfigure(self.pause_text_widget, state=HIDDEN)
+            self.close_menu()
         else:
-            print("PAUSE")
-            self.canvas.itemconfigure(self.pause_widget, state=HIDDEN)
-            self.canvas.itemconfigure(self.play_widget, state=NORMAL)
-            self.canvas.itemconfigure(self.pause_background_widget, state=NORMAL)
-            self.canvas.itemconfigure(self.pause_text_widget, state=NORMAL)
+            self.open_menu()
 
-        self.is_paused = not self.is_paused
+    def open_menu(self):
+        print("OPEN MENU")
+        self.is_paused = True
+        self.canvas.itemconfigure(self.pause_background_widget, state=NORMAL)
+        self.canvas.itemconfigure(self.pause_text_widget, state=NORMAL)
+        self.canvas.itemconfigure(self.resume_button_widget, state=NORMAL)
+        self.canvas.itemconfigure(self.exclude_button_widget, state=NORMAL)
+        self.canvas.itemconfigure(self.quit_button_widget, state=NORMAL)
+        self.canvas.itemconfigure(self.menu_button_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.prev_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.next_widget, state=HIDDEN)
+        if not self.is_manual:
+            self.canvas.itemconfigure(self.extend_timer_button_widget, state=NORMAL)
+
+    def close_menu(self):
+        print("CLOSE MENU")
+        self.is_paused = False
+        self.canvas.itemconfigure(self.pause_background_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.pause_text_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.resume_button_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.exclude_button_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.quit_button_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.extend_timer_button_widget, state=HIDDEN)
+        self.canvas.itemconfigure(self.menu_button_widget, state=NORMAL)
+        if self.is_manual:
+            self.canvas.itemconfigure(self.prev_widget, state=NORMAL)
+            self.canvas.itemconfigure(self.next_widget, state=NORMAL)
+
+    def exclude_current_image(self):
+        path, _, _ = self.imageset[self.index]
+        print("EXCLUDE", path)
+        self.on_exclude_image(path)
+        self.close_menu()
+        self.go_to_image(self.index + 1)
+
+    def extend_timer(self):
+        print("EXTEND TIMER")
+        self.timer += EXTEND_TIMER_SECONDS
+        self.update_timer_text()
+
+    def quit_session(self):
+        self.restart()
 
     def next(self):
+        if not self.is_manual:
+            return
         print("NEXT")
         went_to_new_image = self.go_to_image(self.index + 1)
 
@@ -229,6 +284,8 @@ class SessionApp:
             self.update_timer_text()
 
     def prev(self):
+        if not self.is_manual:
+            return
         print("PREV")
         went_to_new_image = self.go_to_image(self.index - 1)
 
@@ -286,8 +343,11 @@ class SessionApp:
         self.canvas.delete(self.timer_widget)
         self.canvas.delete(self.timer_widget_shadow)
         self.canvas.delete(self.image_widget)
-        self.canvas.delete(self.pause_widget)
-        self.canvas.delete(self.play_widget)
+        self.canvas.delete(self.menu_button_widget)
+        self.canvas.delete(self.resume_button_widget)
+        self.canvas.delete(self.exclude_button_widget)
+        self.canvas.delete(self.extend_timer_button_widget)
+        self.canvas.delete(self.quit_button_widget)
         self.canvas.delete(self.prev_widget)
         self.canvas.delete(self.next_widget)
         self.canvas.delete(self.pause_background_widget)
@@ -311,20 +371,23 @@ def start_session(
     callback: Callable[[str], None],
     locations: Iterable[str] = (),
     monochrome: bool = False,
+    excluded: Iterable[str] = (),
+    keybindings: dict[str, str] | None = None,
+    on_exclude_image: Callable[[str], None] | None = None,
 ):
     if mode.manual:
         manual_timer_placeholder = int(1)
-        image_paths = list(
-            map(
-                lambda path: (path, manual_timer_placeholder, False),
-                images_in_path(imageset.paths, locations),
-            )
-        )
+        available_images = images_in_path(imageset.paths, locations, excluded)
+        if not available_images:
+            raise Exception("No images found for the selected image set(s).")
+        image_paths = [
+            (path, manual_timer_placeholder, False) for path in available_images
+        ]
         random.shuffle(image_paths)
         print(f"Generated croquis plan of {len(image_paths)} images")
     else:
         image_paths = generate_random_image_sequence(
-            imageset.paths, mode.timers, locations
+            imageset.paths, mode.timers, locations, excluded
         )
         print("Generated croquis plan:")
         for image_path, image_timer, is_flipped in image_paths:
@@ -332,7 +395,17 @@ def start_session(
                 f" - '{image_path}'{' (mirrored)' if is_flipped else ''} for {image_timer}s"
             )
 
-    app = SessionApp(tk, canvas, f"Croquis: {name}", dimensions, monochrome, locations)
+    app = SessionApp(
+        tk,
+        canvas,
+        f"Croquis: {name}",
+        dimensions,
+        monochrome,
+        locations,
+        mode.manual,
+        keybindings,
+        on_exclude_image,
+    )
     app.imageset = image_paths
     app.main_menu_callback = callback
 
@@ -368,7 +441,7 @@ def start_session(
 
     app.pause_text_widget = canvas.create_text(
         width / 2,
-        height / 2,
+        height / 2 + MENU_TITLE_Y_OFFSET,
         text="[PAUSED]",
         font=PAUSE_FONT,
         fill=PAUSE_TEXT_COLOR,
@@ -415,35 +488,8 @@ def start_session(
         width / 2, 12, font=TIMER_FONT, fill=TIMER_TEXT_COLOR, anchor="n"
     )
 
-    # ▶⏸⏯
-    btn = Button(
-        tk,
-        text="⏸",
-        command=app.pause_or_play,
-        width=BUTTON_WIDTH,
-        height=BUTTON_HEIGHT,
-        relief=FLAT,
-        font=BUTTON_FONT,
-        background=BUTTON_BACKGROUND_COLOR,
-        foreground=BUTTON_TEXT_COLOR,
-    )
-    app.pause_widget = canvas.create_window(
-        width / 2, height - BUTTON_EDGE_OFFSET, anchor="s", window=btn
-    )
-    btn = Button(
-        tk,
-        text="▶",
-        command=app.pause_or_play,
-        width=BUTTON_WIDTH,
-        height=BUTTON_HEIGHT,
-        relief=FLAT,
-        font=BUTTON_FONT,
-        background=BUTTON_BACKGROUND_COLOR,
-        foreground=BUTTON_TEXT_COLOR,
-    )
-    app.play_widget = canvas.create_window(
-        width / 2, height - BUTTON_EDGE_OFFSET, anchor="s", window=btn, state=HIDDEN
-    )
+    # ⏪⏩☰
+    prev_next_state = NORMAL if mode.manual else HIDDEN
 
     btn = Button(
         tk,
@@ -461,6 +507,7 @@ def start_session(
         height - BUTTON_EDGE_OFFSET,
         anchor="s",
         window=btn,
+        state=prev_next_state,
     )
     btn = Button(
         tk,
@@ -478,10 +525,58 @@ def start_session(
         height - BUTTON_EDGE_OFFSET,
         anchor="s",
         window=btn,
+        state=prev_next_state,
     )
 
+    btn = Button(
+        tk,
+        text=MENU_BUTTON_TEXT,
+        command=app.toggle_menu,
+        width=BUTTON_WIDTH,
+        height=BUTTON_HEIGHT,
+        relief=FLAT,
+        font=BUTTON_FONT,
+        background=BUTTON_BACKGROUND_COLOR,
+        foreground=BUTTON_TEXT_COLOR,
+    )
+    app.menu_button_widget = canvas.create_window(
+        BUTTON_EDGE_OFFSET, BUTTON_EDGE_OFFSET, anchor="nw", window=btn
+    )
+
+    def _menu_overlay_button(text: str, command) -> int:
+        btn = Button(
+            tk,
+            text=text,
+            command=command,
+            width=20,
+            height=2,
+            relief=FLAT,
+            font=("arial", 16),
+            background=BUTTON_BACKGROUND_COLOR,
+            foreground=BUTTON_TEXT_COLOR,
+        )
+        # Position is a placeholder - reposition_menu_buttons() (called
+        # below) lays every menu button out based on which ones this mode
+        # actually shows, so the initial y here doesn't matter.
+        return canvas.create_window(
+            width / 2,
+            height / 2,
+            anchor="center",
+            window=btn,
+            state=HIDDEN,
+        )
+
+    app.resume_button_widget = _menu_overlay_button(RESUME_BUTTON_TEXT, app.close_menu)
+    app.exclude_button_widget = _menu_overlay_button(
+        EXCLUDE_BUTTON_TEXT, app.exclude_current_image
+    )
+    app.extend_timer_button_widget = _menu_overlay_button(
+        EXTEND_TIMER_BUTTON_TEXT, app.extend_timer
+    )
+    app.quit_button_widget = _menu_overlay_button(QUIT_BUTTON_TEXT, app.quit_session)
+    app.reposition_menu_buttons()
+
     if mode.manual:
-        app.is_manual = True
         app.go_to_image(app.index + 1)
     else:
         app.redraw(width, height)

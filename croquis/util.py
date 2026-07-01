@@ -24,18 +24,32 @@ def scale_rect_to_bounds(rect: tuple[int, int], bounds: tuple[int, int]) -> floa
 
 
 def generate_random_image_sequence(
-    paths: list[str], timers: str, locations: Iterable[str] = ()
+    paths: list[str],
+    timers: str,
+    locations: Iterable[str] = (),
+    excluded: Iterable[str] = (),
 ) -> list[tuple[str, int, bool]]:
-    potential_images = images_in_path(paths, locations)
+    potential_images = images_in_path(paths, locations, excluded)
+    if not potential_images:
+        raise Exception("No images found for the selected image set(s).")
 
     timers = parse_timer(timers)
 
-    is_mirrored = [
-        bool(random.getrandbits(1))
-        for _ in range(0, min(len(potential_images), len(timers)))
-    ]
+    sampled_images = _sample_with_repeats(potential_images, len(timers))
+    is_mirrored = [bool(random.getrandbits(1)) for _ in range(len(timers))]
 
-    return list(zip(random.sample(potential_images, len(timers)), timers, is_mirrored))
+    return list(zip(sampled_images, timers, is_mirrored))
+
+
+def _sample_with_repeats(pool: list[str], count: int) -> list[str]:
+    """Sample `count` items from `pool` without repeats until the pool is
+    exhausted, then reshuffle and continue - so a pool smaller than `count`
+    fills the rest by repeating images rather than raising."""
+    result = []
+    while len(result) < count:
+        remaining = count - len(result)
+        result.extend(random.sample(pool, min(remaining, len(pool))))
+    return result
 
 
 def resolve_image_path(path: str, locations: Iterable[str]) -> str:
@@ -44,6 +58,10 @@ def resolve_image_path(path: str, locations: Iterable[str]) -> str:
         if os.path.isdir(candidate):
             return candidate
     return path
+
+
+def normalize_path(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path))
 
 
 def shorten_to_location(path: str, locations: Iterable[str]) -> str:
@@ -59,13 +77,19 @@ def shorten_to_location(path: str, locations: Iterable[str]) -> str:
     return min(candidates, key=len)
 
 
-def images_in_path(paths: list[str], locations: Iterable[str] = ()) -> list[str]:
+def images_in_path(
+    paths: list[str], locations: Iterable[str] = (), excluded: Iterable[str] = ()
+) -> list[str]:
     search_locations = [".", *locations]
+    excluded_normalized = {normalize_path(path) for path in excluded}
     images = []
     for path in paths:
         resolved = resolve_image_path(path, search_locations)
         for dirpath, _dirnames, filenames in os.walk(resolved):
-            images.extend([os.path.join(dirpath, filename) for filename in filenames])
+            for filename in filenames:
+                candidate = os.path.join(dirpath, filename)
+                if normalize_path(candidate) not in excluded_normalized:
+                    images.append(candidate)
     return images
 
 

@@ -235,6 +235,12 @@ class MainMenuApp:
             ),
         ).pack(anchor=CENTER)
 
+    def _on_exclude_image(self, path: str):
+        normalized = normalize_path(path)
+        if normalized not in {normalize_path(p) for p in self.config.excluded_images}:
+            self.config.excluded_images.append(normalized)
+            save_config(self.config, self.config_path)
+
     def start_session(
         self, picked_imagesets: set[str], picked_mode: str, monochrome: bool = False
     ):
@@ -260,6 +266,9 @@ class MainMenuApp:
                 self.main_menu_callback,
                 self.config.image_locations,
                 monochrome,
+                self.config.excluded_images,
+                self.config.keybindings,
+                self._on_exclude_image,
             )
         except Exception as e:
             show_error_modal(e)

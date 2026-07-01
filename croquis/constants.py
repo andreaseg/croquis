@@ -3,10 +3,17 @@ BACKGROUND_COLOR = "#121212"
 TEXT_SHADOW_OFFSET = 1
 TEXT_SHADOW_COLOR = "#000000"
 
+# PAUSE_TEXT_COLOR and BUTTON_TEXT_COLOR ("the whites") below are sepia-tinted
+# using the same luminance-preserving math as monochrome.py (computed offline,
+# not a live import - monochrome.py already imports LUMA_WEIGHTS/
+# SEPIA_REFERENCE_COLOR from this module, so the reverse import would cycle),
+# at a low tint strength (0.12) for a barely-perceptible warm cream rather
+# than clinical white. Backgrounds stay their original neutral grey - only
+# the whites get the sepia treatment.
 PAUSE_BACKGROUND_COLOR = "#706B6B"
 
 PAUSE_FONT = ("arial", 40)
-PAUSE_TEXT_COLOR = "#FFFFFF"
+PAUSE_TEXT_COLOR = "#FFFCE9"
 
 PATH_FONT = ("arial", 10)
 PATH_TEXT_COLOR = "#A0A0A0"
@@ -18,12 +25,36 @@ PROGRESS_FONT = ("arial", 20)
 PROGRESS_TEXT_COLOR = "#A0A0A0"
 
 BUTTON_BACKGROUND_COLOR = "#303030"
-BUTTON_TEXT_COLOR = "#FFFFFF"
+BUTTON_TEXT_COLOR = "#FFFCE9"
 BUTTON_FONT = ("arial", 12)
-BUTTON_POSITION_OFFSET = 60
+# Half the gap between the prev/next buttons' centers. Used to be 60 to leave
+# room for a pause/play button between them; now that pause is a separate
+# burger button (top-left corner), prev/next sit right next to each other.
+BUTTON_POSITION_OFFSET = 35
 BUTTON_WIDTH = 6
 BUTTON_HEIGHT = 1
 BUTTON_EDGE_OFFSET = 8
+
+EXTEND_TIMER_SECONDS = 30
+
+# Vertical layout of the pause/menu overlay, relative to the screen center.
+# MENU_BUTTON_Y_OFFSET is the first button's offset; each subsequent button
+# adds MENU_BUTTON_SPACING. The buttons (width=20, height=2, font arial 16)
+# render at 66px tall (confirmed via winfo_reqheight()), so spacing must
+# clear that to leave any visible gap - this leaves a ~7px gap.
+MENU_TITLE_Y_OFFSET = -150
+MENU_BUTTON_Y_OFFSET = -60
+MENU_BUTTON_SPACING = 73
+
+MENU_BUTTON_TEXT = "☰"
+RESUME_BUTTON_TEXT = "Resume"
+EXCLUDE_BUTTON_TEXT = "Skip / Exclude Image"
+EXTEND_TIMER_BUTTON_TEXT = f"Extend Timer (+{EXTEND_TIMER_SECONDS}s)"
+QUIT_BUTTON_TEXT = "Quit to Menu"
+
+# Rebindable session keyboard shortcuts. Space is always also bound to "menu"
+# as a fixed, non-rebindable alias - see session.py.
+DEFAULT_KEYBINDINGS = {"menu": "Escape", "prev": "Left", "next": "Right"}
 
 MAIN_MENU_START_BUTTON_TEXT = "Start Session"
 MAIN_MENU_MONOCHROME_TOGGLE_TEXT = "Monochrome"
@@ -52,6 +83,12 @@ MAIN_MENU_ROW_WEIGHTS = [0, 3, 1]
 DEFAULT_CONFIG = """
 dimensions="1920x1200"
 image_locations = ["images"]
+excluded_images = []
+
+[keybindings]
+menu = "Escape"
+prev = "Left"
+next = "Right"
 
 [mode.classic]
 default = "True"

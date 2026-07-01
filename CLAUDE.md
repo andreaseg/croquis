@@ -80,6 +80,35 @@ the active screen's handlers are live).
   mirror transform, i.e. once per image *load*, cached on `self._image_file` — not
   once per resize-redraw, since it's deterministic and resizing reuses the cached,
   already-transformed image.
+  **Pause is a menu, not a toggle button:** there's no separate ⏸/▶ pair anymore —
+  Escape (or `keybindings['menu']`), Space, or the ☰ burger button (top-left, corner-
+  anchored via `canvas.create_window(BUTTON_EDGE_OFFSET, BUTTON_EDGE_OFFSET,
+  anchor="nw", ...)`, so it never needs a `redraw()` entry unlike the center-anchored
+  menu buttons) all call `toggle_menu()`. `is_paused` is *repurposed* as "is the menu
+  open," not a second flag alongside it — `tick()` already gates the countdown on
+  `is_paused`, so opening the menu freezes the timer for free. The menu overlay
+  (`resume_button_widget`, `exclude_button_widget`, `extend_timer_button_widget`,
+  `quit_button_widget`) follows the "always create the widget, toggle
+  `state=NORMAL`/`HIDDEN`" pattern established by `main_menu.py` — deliberately not
+  conditional creation, since `canvas.coords(None, ...)` raises `TclError` while
+  `canvas.delete(None)` is a silent no-op (an asymmetry that makes `None`-guarded
+  widgets a real footgun in `redraw()`). `quit_button_widget` is a separate widget from
+  `restart_widget` ("Back to menu," shown at natural end-of-sequence) rather than one
+  button serving both triggers, to avoid the two visibility conditions fighting over
+  it. `extend_timer_button_widget` is only shown in `open_menu()` when `not
+  self.is_manual` (`self.timer` doesn't exist as a countdown in manual mode). Exclude
+  is wired through a caller-supplied `on_exclude_image(path)` callback (default no-op)
+  so `SessionApp` stays decoupled from `Config`/persistence — same shape as the
+  existing `main_menu_callback`; the actual persistence (append to
+  `Config.excluded_images`, `save_config`) lives in `main_menu.py`/`main.py`. Prev/next
+  buttons and their `<Left>`/`<Right>` bindings are now conditional on `manual` (passed
+  into `__init__` and stored as `self.is_manual` immediately, since binding setup
+  happens inside `__init__` and needs it before `start_session()` could otherwise set
+  it) — timed sessions advance on their own, so those controls are hidden/unbound
+  rather than just inert. Keybindings for `menu`/`prev`/`next` come from
+  `Config.keybindings` (falls back to `DEFAULT_KEYBINDINGS` if `None`); Space is a
+  fixed alias to the same `toggle_menu()` action, not itself rebindable, to keep the
+  Options → Keybindings UI to 3 clean rows instead of 4.
 - `croquis/monochrome.py` — `apply_monochrome(image)`: perceptual greyscale (Pillow's
   `.convert("L")`, i.e. the same BT.601 weights as `LUMA_WEIGHTS` in `constants.py`)
   toned with a brightness-dependent sepia tint. The tint is built to preserve
@@ -109,11 +138,26 @@ the active screen's handlers are live).
   `toml.loads()` of whatever's on disk, so a required field with no default breaks
   loading every `config.toml` written before that field existed (this exact class of
   bug shipped once already — `category` — see git history / `DEFAULT_CONFIG` below).
+  `keybindings: dict[str, str]` (default `dict(DEFAULT_KEYBINDINGS)`) and
+  `excluded_images: list[str]` (default `[]`) follow the same rule; neither needs
+  `__post_init__` handling since both are already TOML-native types that
+  `asdict()`/`toml.dump()` round-trip as-is.
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
   TOML template written out on first run). Keep `DEFAULT_CONFIG` in sync with `Config`'s
   fields — a first run with no `config.toml` constructs `Config(**toml.loads(DEFAULT_CONFIG))`
   directly, so a field this template doesn't demonstrate is a field new users never see,
   and a required field it's missing entirely is a crash on first launch.
+  `DEFAULT_KEYBINDINGS = {"menu": "Escape", "prev": "Left", "next": "Right"}` is the
+  single source of truth for both `Config.keybindings`'s default and the `[keybindings]`
+  table in `DEFAULT_CONFIG` — keep them matching. The session button colors
+  (`BUTTON_BACKGROUND_COLOR`, `PAUSE_BACKGROUND_COLOR`, `BUTTON_TEXT_COLOR`,
+  `PAUSE_TEXT_COLOR`) were recolored to match monochrome mode's sepia tint using the
+  *same math* as `monochrome.py`, but computed **offline via a throwaway script and
+  hardcoded here as plain hex**, not imported live — `monochrome.py` already imports
+  `LUMA_WEIGHTS`/`SEPIA_REFERENCE_COLOR` etc. from `constants.py`, so importing
+  `monochrome.py` from here would cycle. If retuning these, regenerate them the same
+  way (perceptual luminance of the original color → blend toward the sepia reference's
+  luminance-normalized ratios at some strength) rather than hand-picking new hex values.
 - `croquis/util.py` — config/timer parsing (`parse_timer`, `parse_bool`), image
   discovery (`images_in_path`, walks folders recursively). Path resolution for
   `image_locations`: `resolve_image_path(path, locations)` tries `os.path.join(location,
@@ -128,6 +172,18 @@ the active screen's handlers are live).
   for cross-drive paths on Windows, must be caught. `resource_path()` (PyInstaller
   `_MEIPASS` vs dev-mode path resolution — needed for `icon.ico`) is unrelated to any of
   this, a separate concern for bundled app resources, not user image folders.
+  `generate_random_image_sequence` used to crash (`ValueError` from `random.sample`)
+  whenever the picked image set had fewer images than the mode's timer-slot count;
+  `_sample_with_repeats()` fixes this by repeatedly `random.sample`-ing the *whole*
+  pool and concatenating until enough images are collected (a full reshuffle per pass,
+  not `random.choices`, which would cluster repeats unevenly) — an empty pool still
+  raises, but with a friendly `Exception("No images found...")` caught by the existing
+  `show_error_modal`/inline-error paths instead of a raw traceback. Both
+  `images_in_path` and `generate_random_image_sequence` take an `excluded:
+  Iterable[str] = ()` param (same shape as `locations`) for permanently-skipped images
+  (`Config.excluded_images`); matching uses `normalize_path(path) ->
+  os.path.normcase(os.path.abspath(path))`, not bare `os.path.abspath`, because
+  Windows paths need case-folding too for a reliable comparison.
 - `croquis/error_modal.py` — any uncaught exception from `start()` in `main.py` is caught
   and shown in a separate fatal-error Tk window (`show_error_modal`), then exits. It
   builds its own standalone `Tk()` (not a `Toplevel` off the main root — it can fire
@@ -155,6 +211,16 @@ the active screen's handlers are live).
   `_build_folder_list()` (shared by the per-imageset paths list and the Image Locations
   tab) uses a positional synthetic iid (`str(index)`, regenerated on every refresh)
   rather than the path string itself, for exactly this reason.
+  `open_options_editor` also has a Keybindings tab (`ttk.Notebook`, alongside the
+  existing General tab) for `menu`/`prev`/`next`: each row's "Change..." button opens a
+  small blocking modal (`Toplevel` + `grab_set()` + `bind("<Key>", ...)` +
+  `wait_window()` — the same blocking pattern `simpledialog.askstring` already uses
+  elsewhere in this file) that captures the next `event.keysym` and closes itself,
+  rejecting bare modifier keysyms (`Shift_L/R`, `Control_L/R`, `Alt_L/R`, `Caps_Lock`,
+  `Num_Lock`, `Super_L/R` — syntactically bindable in Tk but never what a user means to
+  rebind to) and keys already assigned to a different action, both via the same inline
+  `error_var` label the rest of the editor uses (never `show_error_modal`, same
+  reasoning as elsewhere in this file).
 - `croquis/theme.py` — `apply_theme(tk)`: one-line wrapper around
   `sv_ttk.set_theme(darkdetect.theme(), root=tk)`. Must be called once per `Tk()` root
   that contains `ttk` widgets (themes are per-root, not process-global) — currently
@@ -184,10 +250,13 @@ Prefer `grid_remove()`/`grid()` for runtime show/hide of grid-placed widgets, or
 per the current `main_menu.py` pattern — reuse one set of widgets and update their text
 instead of building one widget set per item and toggling visibility.
 
-**Testing Tkinter code without a display:** `croquis/tests/` currently only covers pure
-logic (`test_util.py`: `parse_timer`, `scale_rect_to_bounds`) — no GUI tests exist. When
-you do need to drive real Tk widgets to verify behavior, you can construct the actual
+**Testing Tkinter code without a display:** `croquis/tests/` covers pure logic only
+(`test_util.py`, `test_model.py`, `test_monochrome.py`) — no GUI tests are checked in.
+When you do need to drive real Tk widgets to verify behavior, construct the actual
 `Tk()`/`Canvas`/app objects in a throwaway script (no `mainloop()` needed — call
 `tk.update()` after state changes and inspect via `winfo_ismapped()`, `winfo_manager()`,
-`.cget(...)`, etc.), which is how the menu/timer bugs above were confirmed and verified
-fixed.
+`.cget(...)`, `.invoke()` on buttons, etc.), which is how the menu/timer bugs above were
+confirmed and verified fixed, and how the session pause-menu/keybinding-rebind behavior
+was verified (a `CapturingSessionApp` subclass + temporary module-attribute monkeypatch
+is one way to get at the `SessionApp` instance, since `start_session()` doesn't return
+it).

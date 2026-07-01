@@ -26,7 +26,15 @@ controls.
   perceptual greyscale with a slight sepia tint (neutral in the shadows, warm in the
   highlights, like graphite on paper), for practicing values without color as a
   distraction.
-- **Pause, skip back/forward, random mirroring** of images during a session.
+- **In-session menu** — press Escape (or click the ☰ button, top-left) to pause and
+  bring up a menu: Resume, Skip / Exclude Image, Extend Timer (+30s, timed sessions
+  only), and Quit to Menu. Excluding an image is permanent — it's saved to
+  `config.toml` and won't show up in any future session until removed from
+  `excluded_images`. Skip back/forward and their keybindings are only shown in manual
+  / classroom mode, since timed sessions advance on their own.
+- **Rebindable keys** — change the menu/pause, previous, and next keys from
+  **Options... → Keybindings**.
+- **Random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 
 ## Running it
@@ -86,6 +94,11 @@ paths = [
 
 [category."Portrait"]
 tags = ["portrait"]
+
+[keybindings]
+menu = "Escape"
+prev = "Left"
+next = "Right"
 ```
 
 - **`image_locations`** — base folders to search for image set paths, in order. The
@@ -103,6 +116,12 @@ tags = ["portrait"]
 - **`[category.<name>]`** — a one-click preset button in the main menu: clicking it
   checks every `[imageset]` whose tags are a superset of the category's tags. Useful for
   "give me everything tagged `figure`" without checking each image set by hand.
+- **`[keybindings]`** — `menu` (opens/closes the in-session pause menu, in addition to
+  Space, which isn't itself rebindable), `prev`/`next` (previous/next image, manual
+  mode only). Editable via **Options... → Keybindings**; defaults to Escape/Left/Right.
+- **`excluded_images`** — full paths of images permanently skipped from every session.
+  Populated via "Skip / Exclude Image" in the in-session menu; edit or clear it by hand
+  to bring an image back.
 
 ## Building the executable
 

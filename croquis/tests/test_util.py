@@ -7,6 +7,8 @@ from croquis.util import (
     resolve_image_path,
     shorten_to_location,
     images_in_path,
+    generate_random_image_sequence,
+    normalize_path,
 )
 
 
@@ -116,3 +118,65 @@ def test_shorten_to_location_falls_back_when_not_contained(tmp_path):
     shortened = shorten_to_location(str(folder), [str(unrelated)])
 
     assert shortened == str(folder)
+
+
+def test_generate_random_image_sequence_repeats_when_pool_smaller_than_timers(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "images" / "Hands"
+    folder.mkdir(parents=True)
+    (folder / "a.jpg").write_bytes(b"")
+    (folder / "b.jpg").write_bytes(b"")
+    (folder / "c.jpg").write_bytes(b"")
+
+    sequence = generate_random_image_sequence(["images/Hands"], "10s*12")
+
+    assert len(sequence) == 12
+    paths = [normalize_path(path) for path, _timer, _mirrored in sequence]
+    assert set(paths) == {
+        normalize_path(str(folder / "a.jpg")),
+        normalize_path(str(folder / "b.jpg")),
+        normalize_path(str(folder / "c.jpg")),
+    }
+
+
+def test_generate_random_image_sequence_raises_on_empty_pool(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "images" / "Hands").mkdir(parents=True)
+
+    with pytest.raises(Exception, match="No images found"):
+        generate_random_image_sequence(["images/Hands"], "10s*3")
+
+
+def test_generate_random_image_sequence_excludes_images(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "images" / "Hands"
+    folder.mkdir(parents=True)
+    (folder / "a.jpg").write_bytes(b"")
+    (folder / "b.jpg").write_bytes(b"")
+
+    excluded = [normalize_path(str(folder / "A.JPG"))]
+    sequence = generate_random_image_sequence(["images/Hands"], "10s*4", excluded=excluded)
+
+    paths = {normalize_path(path) for path, _timer, _mirrored in sequence}
+    assert paths == {normalize_path(str(folder / "b.jpg"))}
+
+
+def test_images_in_path_excludes_case_variant_match(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "images" / "Hands"
+    folder.mkdir(parents=True)
+    (folder / "a.jpg").write_bytes(b"")
+    (folder / "b.jpg").write_bytes(b"")
+
+    excluded = [str(folder / "A.JPG")]
+    images = images_in_path(["images/Hands"], excluded=excluded)
+
+    assert [normalize_path(p) for p in images] == [normalize_path(str(folder / "b.jpg"))]
+
+
+def test_normalize_path_is_case_insensitive(tmp_path):
+    path = tmp_path / "Library" / "Hands"
+
+    assert normalize_path(str(path)) == normalize_path(str(path).upper())

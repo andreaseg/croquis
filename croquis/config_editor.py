@@ -110,6 +110,42 @@ def _prompt_unique_name(
     return name
 
 
+_MODIFIER_ONLY_KEYSYMS = {
+    "Shift_L",
+    "Shift_R",
+    "Control_L",
+    "Control_R",
+    "Alt_L",
+    "Alt_R",
+    "Caps_Lock",
+    "Num_Lock",
+    "Super_L",
+    "Super_R",
+}
+
+
+def _prompt_for_key(parent: Toplevel) -> str | None:
+    dialog = Toplevel(parent)
+    dialog.title("Press a key")
+    dialog.geometry("280x100")
+    dialog.transient(parent)
+    dialog.grab_set()
+    ttk.Label(dialog, text="Press any key...", padding=20).pack(expand=True)
+
+    captured: list[str] = []
+
+    def on_key(event):
+        if event.keysym in _MODIFIER_ONLY_KEYSYMS:
+            return
+        captured.append(event.keysym)
+        dialog.destroy()
+
+    dialog.bind("<Key>", on_key)
+    dialog.focus_set()
+    dialog.wait_window()
+    return captured[0] if captured else None
+
+
 def _build_error_label(window: Toplevel, error_var: StringVar) -> ttk.Label:
     style = ttk.Style()
     style.configure("Error.TLabel", foreground=ERROR_TEXT_COLOR)
@@ -129,7 +165,15 @@ def open_options_editor(
     window.transient(tk)
     window.grab_set()
 
-    dims_frame = ttk.Frame(window)
+    notebook = ttk.Notebook(window)
+    notebook.pack(side=TOP, fill=BOTH, expand=True)
+
+    general_tab = ttk.Frame(notebook)
+    keybindings_tab = ttk.Frame(notebook)
+    notebook.add(general_tab, text="General")
+    notebook.add(keybindings_tab, text="Keybindings")
+
+    dims_frame = ttk.Frame(general_tab)
     dims_frame.pack(side=TOP, fill=X, padx=8, pady=8)
     ttk.Label(dims_frame, text="Window size (WIDTHxHEIGHT):").pack(side=LEFT)
     dimensions_var = StringVar(value=working.dimensions)
@@ -137,7 +181,7 @@ def open_options_editor(
         side=LEFT, padx=8
     )
 
-    body = ttk.Frame(window)
+    body = ttk.Frame(general_tab)
     body.pack(side=TOP, fill=BOTH, expand=True)
 
     selected_mode: list[str | None] = [None]
@@ -236,7 +280,62 @@ def open_options_editor(
             default_menu_container, default_var, default_var.get(), *names
         ).pack()
 
+    # --- Keybindings tab ---
+
+    KEYBINDING_ACTION_LABELS = {
+        "menu": "Open menu / pause",
+        "prev": "Previous image (manual mode)",
+        "next": "Next image (manual mode)",
+    }
+
     error_var = StringVar(value="")
+
+    keybinding_value_labels: dict[str, ttk.Label] = {}
+
+    def refresh_keybinding_labels():
+        for action, label in keybinding_value_labels.items():
+            label.config(text=working.keybindings[action])
+
+    def on_change_key(action: str):
+        new_key = _prompt_for_key(window)
+        if not new_key:
+            return
+        conflicting = next(
+            (
+                other
+                for other, key in working.keybindings.items()
+                if key == new_key and other != action
+            ),
+            None,
+        )
+        if conflicting:
+            error_var.set(
+                f"'{new_key}' is already bound to "
+                f"'{KEYBINDING_ACTION_LABELS[conflicting]}'."
+            )
+            return
+        working.keybindings[action] = new_key
+        refresh_keybinding_labels()
+
+    ttk.Label(
+        keybindings_tab,
+        text="Click Change..., then press the new key.",
+        padding=(8, 8, 8, 0),
+    ).grid(row=0, column=0, columnspan=3, sticky=W)
+
+    for row, action in enumerate(("menu", "prev", "next"), start=1):
+        ttk.Label(keybindings_tab, text=KEYBINDING_ACTION_LABELS[action]).grid(
+            row=row, column=0, sticky=W, padx=8, pady=4
+        )
+        value_label = ttk.Label(keybindings_tab, text=working.keybindings[action])
+        value_label.grid(row=row, column=1, sticky=W, padx=8)
+        keybinding_value_labels[action] = value_label
+        ttk.Button(
+            keybindings_tab,
+            text="Change...",
+            command=lambda a=action: on_change_key(a),
+        ).grid(row=row, column=2, sticky=W, padx=8)
+
     _build_error_label(window, error_var)
 
     def on_save():

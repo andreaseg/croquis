@@ -66,6 +66,12 @@ def _start():
 
     canvas = Canvas(tk, width=width, height=height, background=BACKGROUND_COLOR)
 
+    def on_exclude_image(path: str):
+        normalized = normalize_path(path)
+        if normalized not in {normalize_path(p) for p in config.excluded_images}:
+            config.excluded_images.append(normalized)
+            save_config(config, CONFIG_PATH)
+
     def select_state(action: str):
         if action == "session":
             if picked_session in config.imageset:
@@ -105,6 +111,10 @@ def _start():
                 (width, height),
                 select_state,
                 config.image_locations,
+                False,
+                config.excluded_images,
+                config.keybindings,
+                on_exclude_image,
             )
 
         elif action == "main_menu":
