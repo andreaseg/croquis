@@ -21,7 +21,8 @@ controls.
 - **Image locations** — configure one or more base folders to search, so image set
   paths can just be a folder name instead of a full path. The app's own directory is
   always searched too.
-- **Follows your OS light/dark theme** in the menu and config editor.
+- **Light/dark theme** — follows your OS setting by default, or pin it to Light or Dark
+  from **Options... → General** (applies immediately, no restart needed).
 - **Monochrome mode** — a toggle above "Start Session" that converts images to a
   perceptual greyscale with a slight sepia tint (neutral in the shadows, warm in the
   highlights, like graphite on paper), for practicing values without color as a
@@ -34,6 +35,13 @@ controls.
   / classroom mode, since timed sessions advance on their own.
 - **Rebindable keys** — change the menu/pause, previous, and next keys from
   **Options... → Keybindings**.
+- **Zen mode** — hides the timer, image path/progress text, and the ☰ menu button by
+  default, so nothing but the reference image is on screen. They flash back on for a
+  few seconds whenever something changes (a new image, unpausing, extending the timer),
+  and the countdown reappears on its own once an image is running low on time. Enable
+  it via **Options... → General**. In manual/classroom mode, the prev/next buttons stay
+  visible regardless — Zen mode only hides ambient status text, not your only way to
+  advance.
 - **Random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 
@@ -99,6 +107,9 @@ tags = ["portrait"]
 menu = "Escape"
 prev = "Left"
 next = "Right"
+
+zen_mode = false
+theme = "auto"
 ```
 
 - **`image_locations`** — base folders to search for image set paths, in order. The
@@ -122,6 +133,10 @@ next = "Right"
 - **`excluded_images`** — full paths of images permanently skipped from every session.
   Populated via "Skip / Exclude Image" in the in-session menu; edit or clear it by hand
   to bring an image back.
+- **`zen_mode`** — hide the session's timer/path/progress text and menu button until
+  something changes. Editable via **Options... → General**; defaults to `false`.
+- **`theme`** — `"auto"` (follow the OS setting), `"light"`, or `"dark"`. Editable via
+  **Options... → General**; defaults to `"auto"`.
 
 ## Building the executable
 

@@ -10,9 +10,18 @@ single Windows `.exe` via PyInstaller. See `README.md` for user-facing usage and
 `config.toml` format.
 
 The menu/editor UI uses `ttk` (themed widgets) skinned by `sv-ttk`, applied once per
-`Tk()` root via `croquis/theme.py:apply_theme()` and following the OS light/dark setting
-(`darkdetect`). The session screen (`session.py`) is intentionally NOT themed this way —
-see its note below.
+`Tk()` root via `croquis/theme.py:apply_theme(tk, theme)`. `theme` is `Config.theme`
+(`"auto"`/`"light"`/`"dark"`, default `"auto"`) — `apply_theme` resolves `"light"`/
+`"dark"` directly and falls back to OS auto-detection (`darkdetect`) for anything else
+(`"auto"` or a garbage hand-edited value), so there's no separate validation needed for
+`Config.theme`. `main.py` passes `config.theme` in; `error_modal.py` deliberately calls
+`apply_theme(tk)` with no override (defaults to `"auto"`) since it can fire before
+`config` is loaded (e.g. a malformed `config.toml`), so it can't assume a `Config`
+object exists. Options → General re-applies the theme live via `apply_theme(self.tk,
+self.config.theme)` in `MainMenuApp._on_config_saved()` right after a save, since
+`sv_ttk.set_theme()` can be called again on the same root at any time — no restart
+needed. The session screen (`session.py`) is intentionally NOT themed this way — see
+its note below.
 
 ## Commands
 
@@ -64,7 +73,17 @@ the active screen's handlers are live).
   and passed straight through to `session.start_session(..., monochrome=...)`. Category
   buttons are one-shot presets — clicking one replaces the current checkbox selection
   with that category's matches (`model.imagesets_matching_category`); they carry no
-  persistent selection state of their own.
+  persistent selection state of their own. `_on_config_saved()` (the `on_saved`
+  callback passed to both `open_options_editor`/`open_imageset_editor`) **must** call
+  `self.delete_children()` before invoking `self.main_menu_callback("main_menu")` — this
+  was missing once (a real shipped bug: saving Options/Configure Images left the old
+  `menu_frame`/`menu_bar` alive while a brand-new `MainMenuApp` built a second one on
+  top, visibly duplicating the main menu). `start_session()` already followed this
+  tear-down-before-handoff rule; `_on_config_saved()` didn't, which is why the bug was
+  scoped to the config-editor save path specifically. It also re-applies the theme live
+  (`apply_theme(self.tk, self.config.theme)`) before tearing down, since `self.config`
+  already reflects the saved values at that point (`replace_config_fields` ran inside
+  `config_editor.py`'s `on_save()` before this callback fires).
 - `croquis/session.py` — `SessionApp`: drives the actual timed/manual image sequence
   (`tick()` reschedules itself via `tk.after(1000, ...)`; `go_to_image(new_index)` is the
   single state-transition point — it's used both for advancing/going back *and* for
@@ -109,6 +128,29 @@ the active screen's handlers are live).
   `Config.keybindings` (falls back to `DEFAULT_KEYBINDINGS` if `None`); Space is a
   fixed alias to the same `toggle_menu()` action, not itself rebindable, to keep the
   Options → Keybindings UI to 3 clean rows instead of 4.
+  **Zen mode** (`self.zen_mode`, from `Config.zen_mode`) hides the timer/path/progress
+  text and the ☰ burger by default, revealing the text overlay only transiently.
+  `zen_reveal()` sets a `time.monotonic()` deadline (`_zen_reveal_until`) and schedules
+  a one-shot `tk.after(ZEN_REVEAL_SECONDS * 1000, ...)` to hide it again — using
+  `time.monotonic()` rather than tracking Tk `after` state directly means the "is it
+  currently revealed" check (`_apply_zen_visibility()`) is a pure read with no timer
+  bookkeeping beyond the single cancel-and-replace on each new reveal (`after_cancel`
+  the previous handle before scheduling a new one, so rapid triggers don't stack
+  callbacks). `_zen_final_countdown_active()` is a *second*, independent reason to
+  reveal — once `self.timer` drops to/below `util.zen_reveal_threshold(image_duration)`
+  (tiered: longer images get a longer heads-up before their timer runs out), the
+  countdown becomes visible persistently, not just for the transient window; `tick()`
+  calls `_apply_zen_visibility()` every second so this turns on/off live as the
+  countdown crosses the threshold. Manual mode never runs `tick()`, but it also has no
+  countdown, so `_zen_final_countdown_active()` short-circuits `False` for
+  `self.is_manual` — the transient reveal from each `next()`/`prev()`-driven
+  `go_to_image()` call is the only mechanism needed there. `_apply_zen_visibility()`
+  guards on `self.has_ended`, and `delete_children()` cancels any pending
+  `_zen_reveal_after_id` — both defend against the exact class of bug the stale-
+  keybinding fix above addressed: a scheduled callback outliving the widgets/session it
+  was meant to affect. Per the user's explicit call, prev/next in manual mode are
+  **not** gated by Zen mode at all (manual mode's only way to advance shouldn't
+  disappear) — only the burger button and the timer/path/progress text are.
 - `croquis/monochrome.py` — `apply_monochrome(image)`: perceptual greyscale (Pillow's
   `.convert("L")`, i.e. the same BT.601 weights as `LUMA_WEIGHTS` in `constants.py`)
   toned with a brightness-dependent sepia tint. The tint is built to preserve
@@ -141,7 +183,16 @@ the active screen's handlers are live).
   `keybindings: dict[str, str]` (default `dict(DEFAULT_KEYBINDINGS)`) and
   `excluded_images: list[str]` (default `[]`) follow the same rule; neither needs
   `__post_init__` handling since both are already TOML-native types that
-  `asdict()`/`toml.dump()` round-trip as-is.
+  `asdict()`/`toml.dump()` round-trip as-is. `zen_mode: bool = False` is Config's first
+  plain top-level bool field — distinct from `Mode.default`/`Mode.manual`, which are
+  stored as quoted strings and parsed via `parse_bool()` in `Mode.__post_init__`; TOML
+  has a native bool type too, so `zen_mode` round-trips as a bare `true`/`false`
+  literal with no parsing step needed, same reasoning as the list/dict fields above.
+  `theme: str = "auto"` follows the same no-`__post_init__`-needed pattern; it's
+  deliberately unvalidated here (any string round-trips fine) — `theme.apply_theme()`
+  is the one place that interprets it, and it already treats anything other than
+  `"light"`/`"dark"` as "auto-detect," so a garbage hand-edited value degrades
+  gracefully instead of needing a dataclass-level check.
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
   TOML template written out on first run). Keep `DEFAULT_CONFIG` in sync with `Config`'s
   fields — a first run with no `config.toml` constructs `Config(**toml.loads(DEFAULT_CONFIG))`
@@ -184,6 +235,11 @@ the active screen's handlers are live).
   (`Config.excluded_images`); matching uses `normalize_path(path) ->
   os.path.normcase(os.path.abspath(path))`, not bare `os.path.abspath`, because
   Windows paths need case-folding too for a reliable comparison.
+  `zen_reveal_threshold(image_duration)` is a small pure function backing Zen mode's
+  "reveal the countdown when time is short" behavior (see `session.py` below) — kept
+  here rather than inline in `session.py` specifically so the tiering logic
+  (`ZEN_REVEAL_TIERS`/`ZEN_REVEAL_FALLBACK_SECONDS` in `constants.py`) is unit-testable
+  without constructing any Tk widgets.
 - `croquis/error_modal.py` — any uncaught exception from `start()` in `main.py` is caught
   and shown in a separate fatal-error Tk window (`show_error_modal`), then exits. It
   builds its own standalone `Tk()` (not a `Toplevel` off the main root — it can fire
@@ -221,10 +277,27 @@ the active screen's handlers are live).
   rebind to) and keys already assigned to a different action, both via the same inline
   `error_var` label the rest of the editor uses (never `show_error_modal`, same
   reasoning as elsewhere in this file).
-- `croquis/theme.py` — `apply_theme(tk)`: one-line wrapper around
-  `sv_ttk.set_theme(darkdetect.theme(), root=tk)`. Must be called once per `Tk()` root
-  that contains `ttk` widgets (themes are per-root, not process-global) — currently
-  called from `main.py` and `error_modal.py`.
+  The General tab's Zen mode checkbox (`zen_mode_var`) and theme selector
+  (`theme_var`, a `ttk.OptionMenu` with `"auto"`/`"light"`/`"dark"` — same widget type
+  already used for "Default mode:" below it, for consistency within this file) both
+  sit directly under the window size field, outside the per-mode `body`/`form_frame`
+  area — they're top-level `Config` settings like `dimensions`, not scoped to an
+  individual mode. **`OPTIONS_WINDOW_SIZE` must be tall enough for the General tab's
+  content or the Save/Cancel row at the bottom gets clipped** (a real shipped bug: the
+  fixed `640x480` was 3px shorter than the tab's actual required height once the
+  Keybindings tab and these two General-tab rows were added, so the buttons were
+  offscreen until the user manually resized) — verify with
+  `window.winfo_reqheight()` after `update_idletasks()` in a headless script if you add
+  more rows here, rather than guessing a new constant.
+- `croquis/theme.py` — `apply_theme(tk, theme="auto")`: `theme` is `Config.theme`;
+  `"light"`/`"dark"` are used as-is, anything else (including `"auto"` or a bad
+  hand-edited value) falls back to `darkdetect.theme()`-based OS detection. Wraps
+  `sv_ttk.set_theme(resolved, root=tk)`. Must be called once per `Tk()` root that
+  contains `ttk` widgets (themes are per-root, not process-global) — currently called
+  from `main.py` (with `config.theme`), `error_modal.py` (no override — see its note
+  above for why), and `MainMenuApp._on_config_saved()` (to re-apply live after an
+  Options save). `sv_ttk.set_theme()` is safe to call repeatedly on the same root —
+  that's how the live re-apply works, no special "already themed" guard needed.
 
 **Codebase convention:** files use `from tkinter import *` / `from croquis.x import *`
 throughout (Tk constants like `FLAT`, `W`, `NW` are used unqualified). This is intentional

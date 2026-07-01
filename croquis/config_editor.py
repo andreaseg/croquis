@@ -7,7 +7,7 @@ from tkinter import simpledialog, messagebox, filedialog, ttk
 from croquis.model import *
 from croquis.util import parse_timer, shorten_to_location
 
-OPTIONS_WINDOW_SIZE = "640x480"
+OPTIONS_WINDOW_SIZE = "640x560"
 IMAGESET_WINDOW_SIZE = "780x520"
 ERROR_TEXT_COLOR = "#CC3333"
 
@@ -180,6 +180,21 @@ def open_options_editor(
     ttk.Entry(dims_frame, textvariable=dimensions_var, width=16).pack(
         side=LEFT, padx=8
     )
+
+    zen_mode_var = BooleanVar(value=working.zen_mode)
+    ttk.Checkbutton(
+        general_tab,
+        text="Zen mode (hide session UI until needed)",
+        variable=zen_mode_var,
+    ).pack(side=TOP, anchor=W, padx=8, pady=(0, 8))
+
+    theme_frame = ttk.Frame(general_tab)
+    theme_frame.pack(side=TOP, fill=X, padx=8, pady=(0, 8))
+    ttk.Label(theme_frame, text="Theme:").pack(side=LEFT)
+    theme_var = StringVar(value=working.theme)
+    ttk.OptionMenu(
+        theme_frame, theme_var, working.theme, "auto", "light", "dark"
+    ).pack(side=LEFT, padx=8)
 
     body = ttk.Frame(general_tab)
     body.pack(side=TOP, fill=BOTH, expand=True)
@@ -357,6 +372,8 @@ def open_options_editor(
             mode.default = name == default_var.get()
 
         working.dimensions = dimensions_var.get().strip()
+        working.zen_mode = zen_mode_var.get()
+        working.theme = theme_var.get()
 
         save_config(working, config_path)
         replace_config_fields(config, working)

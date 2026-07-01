@@ -4,5 +4,6 @@ import sv_ttk
 import darkdetect
 
 
-def apply_theme(tk: Tk) -> None:
-    sv_ttk.set_theme(darkdetect.theme() or "dark", root=tk)
+def apply_theme(tk: Tk, theme: str = "auto") -> None:
+    resolved = theme if theme in ("light", "dark") else (darkdetect.theme() or "dark")
+    sv_ttk.set_theme(resolved, root=tk)

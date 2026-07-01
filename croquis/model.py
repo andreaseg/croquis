@@ -53,6 +53,8 @@ class Config:
     image_locations: list[str] = field(default_factory=list)
     keybindings: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_KEYBINDINGS))
     excluded_images: list[str] = field(default_factory=list)
+    zen_mode: bool = False
+    theme: str = "auto"
 
     def __post_init__(self):
         self.imageset = {k: ImageSet(**v) for (k, v) in self.imageset.items()}

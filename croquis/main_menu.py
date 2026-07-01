@@ -9,6 +9,7 @@ from croquis.session import start_session
 from croquis.model import *
 from croquis.error_modal import show_error_modal
 from croquis.config_editor import open_options_editor, open_imageset_editor
+from croquis.theme import apply_theme
 
 
 class MainMenuApp:
@@ -51,6 +52,8 @@ class MainMenuApp:
             self.menu_bar = None
 
     def _on_config_saved(self):
+        apply_theme(self.tk, self.config.theme)
+        self.delete_children()
         self.main_menu_callback("main_menu")
 
     def toggle_imageset(self, name: str):
@@ -269,6 +272,7 @@ class MainMenuApp:
                 self.config.excluded_images,
                 self.config.keybindings,
                 self._on_exclude_image,
+                self.config.zen_mode,
             )
         except Exception as e:
             show_error_modal(e)

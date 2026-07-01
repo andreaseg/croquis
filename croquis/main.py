@@ -58,7 +58,7 @@ def _start():
         action = "main_menu"
 
     tk = Tk()
-    apply_theme(tk)
+    apply_theme(tk, config.theme)
     tk.iconbitmap(resource_path("icon.ico"))
     tk.geometry(config.dimensions)
 
@@ -115,6 +115,7 @@ def _start():
                 config.excluded_images,
                 config.keybindings,
                 on_exclude_image,
+                config.zen_mode,
             )
 
         elif action == "main_menu":

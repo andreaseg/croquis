@@ -37,6 +37,15 @@ BUTTON_EDGE_OFFSET = 8
 
 EXTEND_TIMER_SECONDS = 30
 
+ZEN_REVEAL_SECONDS = 3  # brief overlay duration on new image / unpause / extend timer
+
+# Tiered (duration_threshold, reveal_seconds) pairs, checked in order via
+# util.zen_reveal_threshold() - the countdown becomes persistently visible once
+# an image's remaining time drops to/below reveal_seconds, longer images get a
+# longer heads-up before their timer runs out.
+ZEN_REVEAL_TIERS = [(600, 60), (120, 30), (30, 10)]
+ZEN_REVEAL_FALLBACK_SECONDS = 5
+
 # Vertical layout of the pause/menu overlay, relative to the screen center.
 # MENU_BUTTON_Y_OFFSET is the first button's offset; each subsequent button
 # adds MENU_BUTTON_SPACING. The buttons (width=20, height=2, font arial 16)
@@ -84,6 +93,8 @@ DEFAULT_CONFIG = """
 dimensions="1920x1200"
 image_locations = ["images"]
 excluded_images = []
+zen_mode = false
+theme = "auto"
 
 [keybindings]
 menu = "Escape"

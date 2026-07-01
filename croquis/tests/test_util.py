@@ -9,6 +9,7 @@ from croquis.util import (
     images_in_path,
     generate_random_image_sequence,
     normalize_path,
+    zen_reveal_threshold,
 )
 
 
@@ -180,3 +181,23 @@ def test_normalize_path_is_case_insensitive(tmp_path):
     path = tmp_path / "Library" / "Hands"
 
     assert normalize_path(str(path)) == normalize_path(str(path).upper())
+
+
+@pytest.mark.parametrize(
+    "image_duration,expected_reveal_seconds",
+    [
+        (700, 60),
+        (601, 60),
+        (600, 30),
+        (300, 30),
+        (121, 30),
+        (120, 10),
+        (60, 10),
+        (31, 10),
+        (30, 5),
+        (10, 5),
+        (5, 5),
+    ],
+)
+def test_zen_reveal_threshold(image_duration: int, expected_reveal_seconds: int):
+    assert zen_reveal_threshold(image_duration) == expected_reveal_seconds

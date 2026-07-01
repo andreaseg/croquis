@@ -1,3 +1,4 @@
+import time
 from tkinter import *
 from PIL import Image, ImageTk, ImageOps
 from typing import Callable, Iterable
@@ -22,6 +23,7 @@ class SessionApp:
         manual: bool = False,
         keybindings: dict[str, str] | None = None,
         on_exclude_image: Callable[[str], None] | None = None,
+        zen_mode: bool = False,
     ):
         self.tk = tk
         self.timer = SessionApp.NOT_SET
@@ -31,6 +33,9 @@ class SessionApp:
         self.monochrome = monochrome
         self.locations = list(locations)
         self.on_exclude_image = on_exclude_image or (lambda path: None)
+        self.zen_mode = zen_mode
+        self._zen_reveal_until: float = 0.0
+        self._zen_reveal_after_id: str | None = None
         self.index = SessionApp.NOT_SET
         self.imageset: list[tuple[str, int, bool]] | None = None
         self.canvas: Canvas | None = canvas
@@ -85,6 +90,7 @@ class SessionApp:
             self.go_to_image(self.index + 1)
 
         self.update_timer_text()
+        self._apply_zen_visibility()
 
         if not self.has_ended:
             self.tk.after(1000, self.tick)
@@ -101,6 +107,48 @@ class SessionApp:
 
         self.canvas.itemconfigure(self.timer_widget, text=updated_text)
         self.canvas.itemconfigure(self.timer_widget_shadow, text=updated_text)
+
+    def zen_reveal(self):
+        """Briefly force the path/progress/timer overlay visible. Called on a
+        real image change, on unpause, and on extend_timer - no-op outside
+        Zen mode."""
+        if not self.zen_mode:
+            return
+        self._zen_reveal_until = time.monotonic() + ZEN_REVEAL_SECONDS
+        self._apply_zen_visibility()
+        if self._zen_reveal_after_id is not None:
+            self.tk.after_cancel(self._zen_reveal_after_id)
+        self._zen_reveal_after_id = self.tk.after(
+            ZEN_REVEAL_SECONDS * 1000, self._apply_zen_visibility
+        )
+
+    def _zen_final_countdown_active(self) -> bool:
+        if (
+            self.is_manual
+            or self.index >= len(self.imageset)
+            or self.timer == SessionApp.NOT_SET
+        ):
+            return False
+        max_time = self.imageset[self.index][1]
+        return self.timer <= zen_reveal_threshold(max_time)
+
+    def _apply_zen_visibility(self):
+        if not self.zen_mode or self.has_ended:
+            return
+        visible = (
+            time.monotonic() < self._zen_reveal_until
+            or self._zen_final_countdown_active()
+        )
+        state = NORMAL if visible else HIDDEN
+        for widget in (
+            self.path_widget,
+            self.path_widget_shadow,
+            self.progress_widget,
+            self.progress_widget_shadow,
+            self.timer_widget,
+            self.timer_widget_shadow,
+        ):
+            self.canvas.itemconfigure(widget, state=state)
 
     def left_click(self, event):
         self.image_resize = event
@@ -208,6 +256,7 @@ class SessionApp:
 
         if new_index != previous_index:
             self.timer = time
+            self.zen_reveal()
 
         display_path = shorten_to_location(path, self.locations)
         display_text = f"{display_path}{' (mirrored)' if is_mirrored else ''}"
@@ -253,10 +302,13 @@ class SessionApp:
         self.canvas.itemconfigure(self.exclude_button_widget, state=HIDDEN)
         self.canvas.itemconfigure(self.quit_button_widget, state=HIDDEN)
         self.canvas.itemconfigure(self.extend_timer_button_widget, state=HIDDEN)
-        self.canvas.itemconfigure(self.menu_button_widget, state=NORMAL)
+        self.canvas.itemconfigure(
+            self.menu_button_widget, state=HIDDEN if self.zen_mode else NORMAL
+        )
         if self.is_manual:
             self.canvas.itemconfigure(self.prev_widget, state=NORMAL)
             self.canvas.itemconfigure(self.next_widget, state=NORMAL)
+        self.zen_reveal()
 
     def exclude_current_image(self):
         path, _, _ = self.imageset[self.index]
@@ -269,6 +321,7 @@ class SessionApp:
         print("EXTEND TIMER")
         self.timer += EXTEND_TIMER_SECONDS
         self.update_timer_text()
+        self.zen_reveal()
 
     def quit_session(self):
         self.restart()
@@ -336,6 +389,9 @@ class SessionApp:
         self.canvas.tag_lower(self.image_widget)
 
     def delete_children(self):
+        if self._zen_reveal_after_id is not None:
+            self.tk.after_cancel(self._zen_reveal_after_id)
+            self._zen_reveal_after_id = None
         self.canvas.delete(self.path_widget)
         self.canvas.delete(self.path_widget_shadow)
         self.canvas.delete(self.progress_widget)
@@ -374,6 +430,7 @@ def start_session(
     excluded: Iterable[str] = (),
     keybindings: dict[str, str] | None = None,
     on_exclude_image: Callable[[str], None] | None = None,
+    zen_mode: bool = False,
 ):
     if mode.manual:
         manual_timer_placeholder = int(1)
@@ -405,6 +462,7 @@ def start_session(
         mode.manual,
         keybindings,
         on_exclude_image,
+        zen_mode,
     )
     app.imageset = image_paths
     app.main_menu_callback = callback
@@ -539,8 +597,13 @@ def start_session(
         background=BUTTON_BACKGROUND_COLOR,
         foreground=BUTTON_TEXT_COLOR,
     )
+    menu_button_state = HIDDEN if zen_mode else NORMAL
     app.menu_button_widget = canvas.create_window(
-        BUTTON_EDGE_OFFSET, BUTTON_EDGE_OFFSET, anchor="nw", window=btn
+        BUTTON_EDGE_OFFSET,
+        BUTTON_EDGE_OFFSET,
+        anchor="nw",
+        window=btn,
+        state=menu_button_state,
     )
 
     def _menu_overlay_button(text: str, command) -> int:

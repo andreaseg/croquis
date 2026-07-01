@@ -133,3 +133,29 @@ def test_config_loads_with_defaults_when_keybindings_and_excluded_images_missing
 
     assert loaded.keybindings == {"menu": "Escape", "prev": "Left", "next": "Right"}
     assert loaded.excluded_images == []
+    assert loaded.zen_mode is False
+    assert loaded.theme == "auto"
+
+
+def test_zen_mode_round_trips(tmp_path):
+    config = make_config()
+    config.zen_mode = True
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+    assert loaded.zen_mode is True
+
+
+def test_theme_round_trips(tmp_path):
+    config = make_config()
+    config.theme = "dark"
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+    assert loaded.theme == "dark"

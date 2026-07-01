@@ -7,6 +7,8 @@ from typing import Iterable
 import tkinter as tk
 from tkinter import font as tkFont
 
+from .constants import ZEN_REVEAL_TIERS, ZEN_REVEAL_FALLBACK_SECONDS
+
 
 def parse_bool(s: str | bool) -> bool:
     if isinstance(s, bool):
@@ -62,6 +64,15 @@ def resolve_image_path(path: str, locations: Iterable[str]) -> str:
 
 def normalize_path(path: str) -> str:
     return os.path.normcase(os.path.abspath(path))
+
+
+def zen_reveal_threshold(image_duration: int) -> int:
+    """Seconds before an image's timer expires at which Zen mode should
+    persistently reveal the countdown, tiered by the image's total duration."""
+    for duration_threshold, reveal_seconds in ZEN_REVEAL_TIERS:
+        if image_duration > duration_threshold:
+            return reveal_seconds
+    return ZEN_REVEAL_FALLBACK_SECONDS
 
 
 def shorten_to_location(path: str, locations: Iterable[str]) -> str:
