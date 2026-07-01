@@ -8,7 +8,6 @@ from croquis.session import start_session
 from croquis.main_menu import start_main_menu
 from croquis.error_modal import show_error_modal
 from croquis.model import *
-from croquis.config_editor import open_options_editor, open_imageset_editor
 from croquis.theme import apply_theme
 
 CONFIG_PATH = "config.toml"
@@ -67,11 +66,7 @@ def _start():
 
     canvas = Canvas(tk, width=width, height=height, background=BACKGROUND_COLOR)
 
-    current_screen = [None]
-
     def select_state(action: str):
-        current_screen[0] = action
-
         if action == "session":
             if picked_session in config.imageset:
                 session = config.imageset[picked_session]
@@ -116,29 +111,13 @@ def _start():
             start_main_menu(
                 tk,
                 canvas,
-                config.imageset,
-                config.mode,
-                config.category,
+                config,
+                CONFIG_PATH,
                 callback=select_state,
             )
 
         else:
             raise Exception(f"Unknow action type '{action}'")
-
-    def on_config_saved():
-        if current_screen[0] == "main_menu":
-            select_state("main_menu")
-
-    menu_bar = Menu(tk)
-    menu_bar.add_command(
-        label="Options...",
-        command=lambda: open_options_editor(tk, config, CONFIG_PATH, on_config_saved),
-    )
-    menu_bar.add_command(
-        label="Configure Images...",
-        command=lambda: open_imageset_editor(tk, config, CONFIG_PATH, on_config_saved),
-    )
-    tk.config(menu=menu_bar)
 
     select_state(action)
 

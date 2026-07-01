@@ -8,6 +8,7 @@ from croquis.constants import *
 from croquis.session import start_session
 from croquis.model import *
 from croquis.error_modal import show_error_modal
+from croquis.config_editor import open_options_editor, open_imageset_editor
 
 
 class MainMenuApp:
@@ -15,19 +16,21 @@ class MainMenuApp:
         self,
         tk: Tk,
         canvas: Canvas,
-        imagesets: dict[str, ImageSet],
-        modes: dict[str, Mode],
-        categories: dict[str, Category],
+        config: Config,
+        config_path: str,
         main_menu_callback: Callable[[str], None],
     ):
         self.tk: Tk = tk
         self.canvas: Canvas = canvas
-        self.imagesets: dict[str, ImageSet] = imagesets
-        self.modes: dict[str, Mode] = modes
-        self.categories: dict[str, Category] = categories
+        self.config: Config = config
+        self.config_path: str = config_path
+        self.imagesets: dict[str, ImageSet] = config.imageset
+        self.modes: dict[str, Mode] = config.mode
+        self.categories: dict[str, Category] = config.category
         self.picked_imagesets: set[str] = set()
         self.mode_var: StringVar = StringVar(value="")
         self.menu_frame: ttk.Frame | None = None
+        self.menu_bar: Menu | None = None
 
         self.main_menu_callback = main_menu_callback
 
@@ -42,6 +45,12 @@ class MainMenuApp:
         if self.menu_frame is not None:
             self.menu_frame.destroy()
             self.menu_frame = None
+        if self.menu_bar is not None:
+            self.tk.config(menu="")
+            self.menu_bar = None
+
+    def _on_config_saved(self):
+        self.main_menu_callback("main_menu")
 
     def toggle_imageset(self, name: str):
         print("imageset", name, self.imageset_vars[name].get())
@@ -132,6 +141,21 @@ class MainMenuApp:
         return buttons
 
     def draw_menu(self):
+        self.menu_bar = Menu(self.tk)
+        self.menu_bar.add_command(
+            label="Options...",
+            command=lambda: open_options_editor(
+                self.tk, self.config, self.config_path, self._on_config_saved
+            ),
+        )
+        self.menu_bar.add_command(
+            label="Configure Images...",
+            command=lambda: open_imageset_editor(
+                self.tk, self.config, self.config_path, self._on_config_saved
+            ),
+        )
+        self.tk.config(menu=self.menu_bar)
+
         menu_frame = ttk.Frame(self.tk, padding=12)
         menu_frame.pack(fill=BOTH, expand=True)
         self.menu_frame = menu_frame
@@ -230,22 +254,23 @@ class MainMenuApp:
 def start_main_menu(
     tk: Tk,
     canvas: Canvas,
-    imagesets: dict[str, ImageSet],
-    modes: dict[str, Mode],
-    categories: dict[str, Category],
+    config: Config,
+    config_path: str,
     callback: Callable[[str], None],
 ):
     print("MAIN MENU")
 
-    app = MainMenuApp(tk, canvas, imagesets, modes, categories, callback)
+    app = MainMenuApp(tk, canvas, config, config_path, callback)
     app.draw_menu()
 
-    default_mode = next((name for name, mode in modes.items() if mode.default), None)
+    default_mode = next(
+        (name for name, mode in config.mode.items() if mode.default), None
+    )
     if default_mode:
         app.mode_var.set(default_mode)
         app.select_mode()
 
-    if imagesets:
-        initial_imageset = random.choice(list(imagesets.keys()))
+    if config.imageset:
+        initial_imageset = random.choice(list(config.imageset.keys()))
         app.imageset_vars[initial_imageset].set(True)
         app.toggle_imageset(initial_imageset)
