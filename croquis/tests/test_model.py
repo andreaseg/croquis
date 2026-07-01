@@ -100,6 +100,12 @@ def test_mode_get_label_raises_without_manual_or_timers():
         mode.get_label()
 
 
+def test_mode_get_label_translates_header():
+    mode = Mode(timers="", default=False, manual=True)
+    header, body, _total = mode.get_label("ja")
+    assert header == "手動"
+
+
 def test_keybindings_and_excluded_images_round_trip(tmp_path):
     config = make_config()
     config.keybindings = {"menu": "Escape", "prev": "a", "next": "d"}
@@ -135,6 +141,7 @@ def test_config_loads_with_defaults_when_keybindings_and_excluded_images_missing
     assert loaded.excluded_images == []
     assert loaded.zen_mode is False
     assert loaded.theme == "auto"
+    assert loaded.language == "en"
 
 
 def test_zen_mode_round_trips(tmp_path):
@@ -159,3 +166,15 @@ def test_theme_round_trips(tmp_path):
 
     assert loaded == config
     assert loaded.theme == "dark"
+
+
+def test_language_round_trips(tmp_path):
+    config = make_config()
+    config.language = "ja"
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+    assert loaded.language == "ja"

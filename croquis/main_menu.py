@@ -10,6 +10,7 @@ from croquis.model import *
 from croquis.error_modal import show_error_modal
 from croquis.config_editor import open_options_editor, open_imageset_editor
 from croquis.theme import apply_theme
+from croquis.i18n import translate
 
 
 class MainMenuApp:
@@ -85,10 +86,14 @@ class MainMenuApp:
         if not name:
             return
 
-        header, body, total_time = self.modes[name].get_label()
+        header, body, total_time = self.modes[name].get_label(self.config.language)
         self.mode_header_label.config(text=header)
         self.mode_body_label.config(text=body)
-        self.mode_total_label.config(text=f"Total: {total_time}")
+        self.mode_total_label.config(
+            text=translate(
+                "Total: {total_time}", self.config.language, total_time=total_time
+            )
+        )
 
     @staticmethod
     def _build_checkbutton_column(
@@ -145,15 +150,16 @@ class MainMenuApp:
         return buttons
 
     def draw_menu(self):
+        language = self.config.language
         self.menu_bar = Menu(self.tk)
         self.menu_bar.add_command(
-            label="Options...",
+            label=translate("Options...", language),
             command=lambda: open_options_editor(
                 self.tk, self.config, self.config_path, self._on_config_saved
             ),
         )
         self.menu_bar.add_command(
-            label="Configure Images...",
+            label=translate("Configure Images...", language),
             command=lambda: open_imageset_editor(
                 self.tk, self.config, self.config_path, self._on_config_saved
             ),
@@ -174,10 +180,12 @@ class MainMenuApp:
             row=0, column=0, columnspan=3, sticky=NSEW, pady=(0, 12)
         )
 
-        imageset_buttons_frame = ttk.Labelframe(menu_frame, text="Image sets")
+        imageset_buttons_frame = ttk.Labelframe(
+            menu_frame, text=translate("Image sets", language)
+        )
         imageset_buttons_frame.grid(row=1, column=0, sticky=NSEW, padx=(0, 8))
 
-        mode_buttons_frame = ttk.Labelframe(menu_frame, text="Mode")
+        mode_buttons_frame = ttk.Labelframe(menu_frame, text=translate("Mode", language))
         mode_buttons_frame.grid(row=1, column=1, sticky=NSEW, padx=8)
 
         start_button_frame = ttk.Frame(menu_frame)
@@ -226,13 +234,13 @@ class MainMenuApp:
 
         ttk.Checkbutton(
             start_button_group,
-            text=MAIN_MENU_MONOCHROME_TOGGLE_TEXT,
+            text=translate("Monochrome", language),
             variable=self.monochrome_var,
         ).pack(anchor=CENTER, pady=(0, 8))
 
         ttk.Button(
             start_button_group,
-            text=MAIN_MENU_START_BUTTON_TEXT,
+            text=translate("Start Session", language),
             command=lambda: self.start_session(
                 self.picked_imagesets, self.mode_var.get(), self.monochrome_var.get()
             ),
@@ -273,6 +281,7 @@ class MainMenuApp:
                 self.config.keybindings,
                 self._on_exclude_image,
                 self.config.zen_mode,
+                self.config.language,
             )
         except Exception as e:
             show_error_modal(e)

@@ -6,10 +6,18 @@ from tkinter import simpledialog, messagebox, filedialog, ttk
 
 from croquis.model import *
 from croquis.util import parse_timer, shorten_to_location
+from croquis.i18n import translate
 
+# Starting sizes only - _grow_to_fit_content() grows the window to whatever
+# the fully-built content actually needs (varies with the active language),
+# so these don't need to be re-tuned by hand every time a row gets added.
 OPTIONS_WINDOW_SIZE = "640x560"
 IMAGESET_WINDOW_SIZE = "780x520"
 ERROR_TEXT_COLOR = "#CC3333"
+
+# Language picker labels name each language in its own script, regardless of
+# the currently active UI language - not itself translated via translate().
+LANGUAGE_LABELS = {"en": "English", "ja": "日本語"}
 
 
 def _build_tree_crud(
@@ -18,6 +26,7 @@ def _build_tree_crud(
     on_add: Callable[[], None],
     on_remove: Callable[[str], None],
     on_rename: Callable[[str], None],
+    language: str = "en",
 ) -> ttk.Treeview:
     frame = ttk.Frame(parent)
     frame.pack(side=LEFT, fill=Y, padx=8, pady=8)
@@ -44,9 +53,15 @@ def _build_tree_crud(
 
     button_frame = ttk.Frame(frame)
     button_frame.pack(side=TOP, fill=X, pady=4)
-    ttk.Button(button_frame, text="Add", command=on_add).pack(side=LEFT, padx=2)
-    ttk.Button(button_frame, text="Rename", command=do_rename).pack(side=LEFT, padx=2)
-    ttk.Button(button_frame, text="Remove", command=do_remove).pack(side=LEFT, padx=2)
+    ttk.Button(button_frame, text=translate("Add", language), command=on_add).pack(
+        side=LEFT, padx=2
+    )
+    ttk.Button(
+        button_frame, text=translate("Rename", language), command=do_rename
+    ).pack(side=LEFT, padx=2)
+    ttk.Button(
+        button_frame, text=translate("Remove", language), command=do_remove
+    ).pack(side=LEFT, padx=2)
 
     return tree
 
@@ -55,6 +70,7 @@ def _build_folder_list(
     parent: ttk.Frame,
     paths: list[str],
     shorten: Callable[[str], str] = lambda p: p,
+    language: str = "en",
 ) -> tuple[ttk.Treeview, Callable[[], None]]:
     tree = ttk.Treeview(parent, show="tree", selectmode="browse", height=10)
     tree.column("#0", width=480)
@@ -79,12 +95,14 @@ def _build_folder_list(
 
     button_frame = ttk.Frame(parent)
     button_frame.pack(anchor=W, pady=4)
-    ttk.Button(button_frame, text="Add folder...", command=on_add_folder).pack(
-        side=LEFT, padx=2
-    )
-    ttk.Button(button_frame, text="Remove selected", command=on_remove_folder).pack(
-        side=LEFT, padx=2
-    )
+    ttk.Button(
+        button_frame, text=translate("Add folder...", language), command=on_add_folder
+    ).pack(side=LEFT, padx=2)
+    ttk.Button(
+        button_frame,
+        text=translate("Remove selected", language),
+        command=on_remove_folder,
+    ).pack(side=LEFT, padx=2)
 
     return tree, refresh
 
@@ -99,13 +117,20 @@ def _refresh_tree(tree: ttk.Treeview, names: list[str], select: str | None = Non
 
 
 def _prompt_unique_name(
-    parent: Toplevel, title: str, prompt: str, existing, initialvalue: str = ""
+    parent: Toplevel,
+    title: str,
+    prompt: str,
+    existing,
+    language: str = "en",
+    initialvalue: str = "",
 ) -> str | None:
     name = simpledialog.askstring(title, prompt, initialvalue=initialvalue, parent=parent)
     if not name:
         return None
     if name in existing:
-        messagebox.showerror(title, f"'{name}' already exists.", parent=parent)
+        messagebox.showerror(
+            title, translate("'{name}' already exists.", language, name=name), parent=parent
+        )
         return None
     return name
 
@@ -124,13 +149,15 @@ _MODIFIER_ONLY_KEYSYMS = {
 }
 
 
-def _prompt_for_key(parent: Toplevel) -> str | None:
+def _prompt_for_key(parent: Toplevel, language: str = "en") -> str | None:
     dialog = Toplevel(parent)
-    dialog.title("Press a key")
+    dialog.title(translate("Press a key", language))
     dialog.geometry("280x100")
     dialog.transient(parent)
     dialog.grab_set()
-    ttk.Label(dialog, text="Press any key...", padding=20).pack(expand=True)
+    ttk.Label(dialog, text=translate("Press any key...", language), padding=20).pack(
+        expand=True
+    )
 
     captured: list[str] = []
 
@@ -154,13 +181,27 @@ def _build_error_label(window: Toplevel, error_var: StringVar) -> ttk.Label:
     return label
 
 
+def _grow_to_fit_content(window: Toplevel):
+    # The initial OPTIONS_WINDOW_SIZE/IMAGESET_WINDOW_SIZE geometry is only a
+    # starting point - actual required height varies with the active
+    # language (translated labels can be longer/shorter than English) and
+    # tends to drift as rows get added, so grow (never shrink) to whatever
+    # the fully-built content actually needs rather than hardcoding a pixel
+    # constant that has to be manually re-tuned every time.
+    window.update_idletasks()
+    required_height = window.winfo_reqheight()
+    if required_height > window.winfo_height():
+        window.geometry(f"{window.winfo_width()}x{required_height}")
+
+
 def open_options_editor(
     tk: Tk, config: Config, config_path: str, on_saved: Callable[[], None]
 ):
     working = copy.deepcopy(config)
+    language = working.language
 
     window = Toplevel(tk)
-    window.title("Options")
+    window.title(translate("Options", language))
     window.geometry(OPTIONS_WINDOW_SIZE)
     window.transient(tk)
     window.grab_set()
@@ -170,12 +211,14 @@ def open_options_editor(
 
     general_tab = ttk.Frame(notebook)
     keybindings_tab = ttk.Frame(notebook)
-    notebook.add(general_tab, text="General")
-    notebook.add(keybindings_tab, text="Keybindings")
+    notebook.add(general_tab, text=translate("General", language))
+    notebook.add(keybindings_tab, text=translate("Keybindings", language))
 
     dims_frame = ttk.Frame(general_tab)
     dims_frame.pack(side=TOP, fill=X, padx=8, pady=8)
-    ttk.Label(dims_frame, text="Window size (WIDTHxHEIGHT):").pack(side=LEFT)
+    ttk.Label(
+        dims_frame, text=translate("Window size (WIDTHxHEIGHT):", language)
+    ).pack(side=LEFT)
     dimensions_var = StringVar(value=working.dimensions)
     ttk.Entry(dims_frame, textvariable=dimensions_var, width=16).pack(
         side=LEFT, padx=8
@@ -184,16 +227,29 @@ def open_options_editor(
     zen_mode_var = BooleanVar(value=working.zen_mode)
     ttk.Checkbutton(
         general_tab,
-        text="Zen mode (hide session UI until needed)",
+        text=translate("Zen mode (hide session UI until needed)", language),
         variable=zen_mode_var,
     ).pack(side=TOP, anchor=W, padx=8, pady=(0, 8))
 
     theme_frame = ttk.Frame(general_tab)
     theme_frame.pack(side=TOP, fill=X, padx=8, pady=(0, 8))
-    ttk.Label(theme_frame, text="Theme:").pack(side=LEFT)
+    ttk.Label(theme_frame, text=translate("Theme:", language)).pack(side=LEFT)
     theme_var = StringVar(value=working.theme)
     ttk.OptionMenu(
         theme_frame, theme_var, working.theme, "auto", "light", "dark"
+    ).pack(side=LEFT, padx=8)
+
+    language_frame = ttk.Frame(general_tab)
+    language_frame.pack(side=TOP, fill=X, padx=8, pady=(0, 8))
+    ttk.Label(language_frame, text=translate("Language:", language)).pack(side=LEFT)
+    language_var = StringVar(
+        value=LANGUAGE_LABELS.get(working.language, LANGUAGE_LABELS["en"])
+    )
+    ttk.OptionMenu(
+        language_frame,
+        language_var,
+        language_var.get(),
+        *LANGUAGE_LABELS.values(),
     ).pack(side=LEFT, padx=8)
 
     body = ttk.Frame(general_tab)
@@ -221,7 +277,13 @@ def open_options_editor(
         timers_var.set(mode.timers)
 
     def on_add_mode():
-        name = _prompt_unique_name(window, "Add mode", "Mode name:", working.mode)
+        name = _prompt_unique_name(
+            window,
+            translate("Add mode", language),
+            translate("Mode name:", language),
+            working.mode,
+            language=language,
+        )
         if not name:
             return
         working.mode[name] = Mode(timers="1m", default=False, manual=False)
@@ -231,7 +293,9 @@ def open_options_editor(
 
     def on_remove_mode(name: str):
         if not messagebox.askyesno(
-            "Remove mode", f"Remove mode '{name}'?", parent=window
+            translate("Remove mode", language),
+            translate("Remove mode '{name}'?", language, name=name),
+            parent=window,
         ):
             return
         del working.mode[name]
@@ -243,7 +307,12 @@ def open_options_editor(
 
     def on_rename_mode(name: str):
         new_name = _prompt_unique_name(
-            window, "Rename mode", "New name:", working.mode, initialvalue=name
+            window,
+            translate("Rename mode", language),
+            translate("New name:", language),
+            working.mode,
+            language=language,
+            initialvalue=name,
         )
         if not new_name:
             return
@@ -255,7 +324,7 @@ def open_options_editor(
         refresh_default_menu()
 
     mode_tree = _build_tree_crud(
-        body, on_select_mode, on_add_mode, on_remove_mode, on_rename_mode
+        body, on_select_mode, on_add_mode, on_remove_mode, on_rename_mode, language
     )
 
     def refresh_modes(select: str | None = None):
@@ -266,16 +335,20 @@ def open_options_editor(
 
     manual_var = BooleanVar(value=False)
     ttk.Checkbutton(
-        form_frame, text="Manual (click to advance)", variable=manual_var
+        form_frame,
+        text=translate("Manual (click to advance)", language),
+        variable=manual_var,
     ).pack(anchor=W)
 
-    ttk.Label(form_frame, text="Timers (e.g. '3*30s 2m 5m'):").pack(
-        anchor=W, pady=(8, 0)
-    )
+    ttk.Label(
+        form_frame, text=translate("Timers (e.g. '3*30s 2m 5m'):", language)
+    ).pack(anchor=W, pady=(8, 0))
     timers_var = StringVar(value="")
     ttk.Entry(form_frame, textvariable=timers_var, width=40).pack(anchor=W)
 
-    ttk.Label(form_frame, text="Default mode:").pack(anchor=W, pady=(16, 0))
+    ttk.Label(form_frame, text=translate("Default mode:", language)).pack(
+        anchor=W, pady=(16, 0)
+    )
     default_var = StringVar(
         value=next((n for n, m in working.mode.items() if m.default), "")
     )
@@ -287,7 +360,9 @@ def open_options_editor(
             child.destroy()
         names = list(working.mode.keys())
         if not names:
-            ttk.Label(default_menu_container, text="(no modes)").pack()
+            ttk.Label(
+                default_menu_container, text=translate("(no modes)", language)
+            ).pack()
             return
         if default_var.get() not in names:
             default_var.set(names[0])
@@ -298,9 +373,9 @@ def open_options_editor(
     # --- Keybindings tab ---
 
     KEYBINDING_ACTION_LABELS = {
-        "menu": "Open menu / pause",
-        "prev": "Previous image (manual mode)",
-        "next": "Next image (manual mode)",
+        "menu": translate("Open menu / pause", language),
+        "prev": translate("Previous image (manual mode)", language),
+        "next": translate("Next image (manual mode)", language),
     }
 
     error_var = StringVar(value="")
@@ -312,7 +387,7 @@ def open_options_editor(
             label.config(text=working.keybindings[action])
 
     def on_change_key(action: str):
-        new_key = _prompt_for_key(window)
+        new_key = _prompt_for_key(window, language)
         if not new_key:
             return
         conflicting = next(
@@ -325,8 +400,12 @@ def open_options_editor(
         )
         if conflicting:
             error_var.set(
-                f"'{new_key}' is already bound to "
-                f"'{KEYBINDING_ACTION_LABELS[conflicting]}'."
+                translate(
+                    "'{new_key}' is already bound to '{label}'.",
+                    language,
+                    new_key=new_key,
+                    label=KEYBINDING_ACTION_LABELS[conflicting],
+                )
             )
             return
         working.keybindings[action] = new_key
@@ -334,7 +413,7 @@ def open_options_editor(
 
     ttk.Label(
         keybindings_tab,
-        text="Click Change..., then press the new key.",
+        text=translate("Click Change..., then press the new key.", language),
         padding=(8, 8, 8, 0),
     ).grid(row=0, column=0, columnspan=3, sticky=W)
 
@@ -347,7 +426,7 @@ def open_options_editor(
         keybinding_value_labels[action] = value_label
         ttk.Button(
             keybindings_tab,
-            text="Change...",
+            text=translate("Change...", language),
             command=lambda a=action: on_change_key(a),
         ).grid(row=row, column=2, sticky=W, padx=8)
 
@@ -357,7 +436,9 @@ def open_options_editor(
         commit_form()
 
         if not re.match(r"^\d+x\d+$", dimensions_var.get().strip()):
-            error_var.set("Window size must look like e.g. 1920x1200")
+            error_var.set(
+                translate("Window size must look like e.g. 1920x1200", language)
+            )
             return
 
         for name, mode in working.mode.items():
@@ -365,7 +446,9 @@ def open_options_editor(
                 try:
                     parse_timer(mode.timers)
                 except Exception as e:
-                    error_var.set(f"Mode '{name}': {e}")
+                    error_var.set(
+                        translate("Mode '{name}': {error}", language, name=name, error=e)
+                    )
                     return
 
         for name, mode in working.mode.items():
@@ -374,6 +457,11 @@ def open_options_editor(
         working.dimensions = dimensions_var.get().strip()
         working.zen_mode = zen_mode_var.get()
         working.theme = theme_var.get()
+        working.language = next(
+            code
+            for code, label in LANGUAGE_LABELS.items()
+            if label == language_var.get()
+        )
 
         save_config(working, config_path)
         replace_config_fields(config, working)
@@ -382,10 +470,12 @@ def open_options_editor(
 
     button_frame = ttk.Frame(window)
     button_frame.pack(side=BOTTOM, fill=X, padx=8, pady=8)
-    ttk.Button(button_frame, text="Cancel", command=window.destroy).pack(
+    ttk.Button(
+        button_frame, text=translate("Cancel", language), command=window.destroy
+    ).pack(side=RIGHT, padx=4)
+    ttk.Button(button_frame, text=translate("Save", language), command=on_save).pack(
         side=RIGHT, padx=4
     )
-    ttk.Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
 
     refresh_modes()
     refresh_default_menu()
@@ -394,14 +484,17 @@ def open_options_editor(
         on_select_mode(first)
         mode_tree.selection_set(first)
 
+    _grow_to_fit_content(window)
+
 
 def open_imageset_editor(
     tk: Tk, config: Config, config_path: str, on_saved: Callable[[], None]
 ):
     working = copy.deepcopy(config)
+    language = working.language
 
     window = Toplevel(tk)
-    window.title("Configure Images")
+    window.title(translate("Configure Images", language))
     window.geometry(IMAGESET_WINDOW_SIZE)
     window.transient(tk)
     window.grab_set()
@@ -412,9 +505,9 @@ def open_imageset_editor(
     imageset_tab = ttk.Frame(notebook)
     category_tab = ttk.Frame(notebook)
     location_tab = ttk.Frame(notebook)
-    notebook.add(imageset_tab, text="Imagesets")
-    notebook.add(category_tab, text="Categories")
-    notebook.add(location_tab, text="Image Locations")
+    notebook.add(imageset_tab, text=translate("Imagesets", language))
+    notebook.add(category_tab, text=translate("Categories", language))
+    notebook.add(location_tab, text=translate("Image Locations", language))
 
     # --- Imagesets tab ---
 
@@ -446,7 +539,11 @@ def open_imageset_editor(
 
     def on_add_imageset():
         name = _prompt_unique_name(
-            window, "Add imageset", "Imageset name:", working.imageset
+            window,
+            translate("Add imageset", language),
+            translate("Imageset name:", language),
+            working.imageset,
+            language=language,
         )
         if not name:
             return
@@ -456,7 +553,9 @@ def open_imageset_editor(
 
     def on_remove_imageset(name: str):
         if not messagebox.askyesno(
-            "Remove imageset", f"Remove imageset '{name}'?", parent=window
+            translate("Remove imageset", language),
+            translate("Remove imageset '{name}'?", language, name=name),
+            parent=window,
         ):
             return
         del working.imageset[name]
@@ -465,7 +564,12 @@ def open_imageset_editor(
 
     def on_rename_imageset(name: str):
         new_name = _prompt_unique_name(
-            window, "Rename imageset", "New name:", working.imageset, initialvalue=name
+            window,
+            translate("Rename imageset", language),
+            translate("New name:", language),
+            working.imageset,
+            language=language,
+            initialvalue=name,
         )
         if not new_name:
             return
@@ -479,6 +583,7 @@ def open_imageset_editor(
         on_add_imageset,
         on_remove_imageset,
         on_rename_imageset,
+        language,
     )
 
     def refresh_imagesets(select: str | None = None):
@@ -487,15 +592,20 @@ def open_imageset_editor(
     imageset_form = ttk.Frame(imageset_tab)
     imageset_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
 
-    ttk.Label(imageset_form, text="Tags (comma-separated):").pack(anchor=W)
+    ttk.Label(imageset_form, text=translate("Tags (comma-separated):", language)).pack(
+        anchor=W
+    )
     imageset_tags_var = StringVar(value="")
     ttk.Entry(imageset_form, textvariable=imageset_tags_var, width=44).pack(anchor=W)
 
-    ttk.Label(imageset_form, text="Folders:").pack(anchor=W, pady=(8, 0))
+    ttk.Label(imageset_form, text=translate("Folders:", language)).pack(
+        anchor=W, pady=(8, 0)
+    )
     imageset_paths_tree, refresh_paths_tree = _build_folder_list(
         imageset_form,
         imageset_paths,
         shorten=lambda p: shorten_to_location(p, working.image_locations),
+        language=language,
     )
 
     # --- Categories tab ---
@@ -520,7 +630,11 @@ def open_imageset_editor(
 
     def on_add_category():
         name = _prompt_unique_name(
-            window, "Add category", "Category name:", working.category
+            window,
+            translate("Add category", language),
+            translate("Category name:", language),
+            working.category,
+            language=language,
         )
         if not name:
             return
@@ -530,7 +644,9 @@ def open_imageset_editor(
 
     def on_remove_category(name: str):
         if not messagebox.askyesno(
-            "Remove category", f"Remove category '{name}'?", parent=window
+            translate("Remove category", language),
+            translate("Remove category '{name}'?", language, name=name),
+            parent=window,
         ):
             return
         del working.category[name]
@@ -539,7 +655,12 @@ def open_imageset_editor(
 
     def on_rename_category(name: str):
         new_name = _prompt_unique_name(
-            window, "Rename category", "New name:", working.category, initialvalue=name
+            window,
+            translate("Rename category", language),
+            translate("New name:", language),
+            working.category,
+            language=language,
+            initialvalue=name,
         )
         if not new_name:
             return
@@ -553,6 +674,7 @@ def open_imageset_editor(
         on_add_category,
         on_remove_category,
         on_rename_category,
+        language,
     )
 
     def refresh_categories(select: str | None = None):
@@ -561,7 +683,9 @@ def open_imageset_editor(
     category_form = ttk.Frame(category_tab)
     category_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
 
-    ttk.Label(category_form, text="Tags (comma-separated):").pack(anchor=W)
+    ttk.Label(category_form, text=translate("Tags (comma-separated):", language)).pack(
+        anchor=W
+    )
     category_tags_var = StringVar(value="")
     ttk.Entry(category_form, textvariable=category_tags_var, width=44).pack(anchor=W)
 
@@ -569,13 +693,16 @@ def open_imageset_editor(
 
     ttk.Label(
         location_tab,
-        text="Folders to search for imageset paths, in addition to the app's own directory:",
+        text=translate(
+            "Folders to search for imageset paths, in addition to the app's own directory:",
+            language,
+        ),
         padding=(8, 8, 8, 0),
     ).pack(anchor=W)
     location_form = ttk.Frame(location_tab)
     location_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
     location_tree, refresh_locations = _build_folder_list(
-        location_form, working.image_locations
+        location_form, working.image_locations, language=language
     )
     refresh_locations()
 
@@ -593,10 +720,12 @@ def open_imageset_editor(
 
     button_frame = ttk.Frame(window)
     button_frame.pack(side=BOTTOM, fill=X, padx=8, pady=8)
-    ttk.Button(button_frame, text="Cancel", command=window.destroy).pack(
+    ttk.Button(
+        button_frame, text=translate("Cancel", language), command=window.destroy
+    ).pack(side=RIGHT, padx=4)
+    ttk.Button(button_frame, text=translate("Save", language), command=on_save).pack(
         side=RIGHT, padx=4
     )
-    ttk.Button(button_frame, text="Save", command=on_save).pack(side=RIGHT, padx=4)
 
     refresh_imagesets()
     refresh_categories()
@@ -608,3 +737,5 @@ def open_imageset_editor(
         first = next(iter(working.category.keys()))
         on_select_category(first)
         category_tree.selection_set(first)
+
+    _grow_to_fit_content(window)

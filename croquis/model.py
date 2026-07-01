@@ -5,6 +5,7 @@ from dataclasses import dataclass, asdict, field
 from typing import Iterable
 from .util import parse_bool, format_time, sort_tags
 from .constants import DEFAULT_KEYBINDINGS
+from .i18n import translate
 
 import croquis.util
 
@@ -28,9 +29,13 @@ class Mode:
         self.default = parse_bool(self.default)
         self.manual = parse_bool(self.manual)
 
-    def get_label(self) -> tuple[str, str, str]:
+    def get_label(self, language: str = "en") -> tuple[str, str, str]:
         if self.manual:
-            return "Manual", "Click to go to next image", "∞"
+            return (
+                translate("Manual", language),
+                translate("Click to go to next image", language),
+                "∞",
+            )
         if self.timers:
             s = sum(croquis.util.parse_timer(self.timers))
 
@@ -39,7 +44,7 @@ class Mode:
             timers = " ".join([t if "*" in t else f"1*{t}" for t in timers.split(" ")])
             timers = timers.replace("*", "×")
 
-            return "Timed", timers, format_time(s)
+            return translate("Timed", language), timers, format_time(s)
 
         raise ValueError("Mode must be manual or have timers set")
 
@@ -55,6 +60,7 @@ class Config:
     excluded_images: list[str] = field(default_factory=list)
     zen_mode: bool = False
     theme: str = "auto"
+    language: str = "en"
 
     def __post_init__(self):
         self.imageset = {k: ImageSet(**v) for (k, v) in self.imageset.items()}

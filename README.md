@@ -43,6 +43,8 @@ controls.
   visible regardless — Zen mode only hides ambient status text, not your only way to
   advance.
 - **Random mirroring** of images during a session.
+- **Language** — English or Japanese, switchable from **Options... → General**
+  (applies immediately, no restart needed).
 - Packaged as a single `croquis.exe` — no Python install required to run it.
 
 ## Running it
@@ -110,6 +112,7 @@ next = "Right"
 
 zen_mode = false
 theme = "auto"
+language = "en"
 ```
 
 - **`image_locations`** — base folders to search for image set paths, in order. The
@@ -137,6 +140,9 @@ theme = "auto"
   something changes. Editable via **Options... → General**; defaults to `false`.
 - **`theme`** — `"auto"` (follow the OS setting), `"light"`, or `"dark"`. Editable via
   **Options... → General**; defaults to `"auto"`.
+- **`language`** — `"en"` or `"ja"`. Editable via **Options... → General**; defaults to
+  `"en"`. Translates the menu, config editor, and session UI; the Japanese strings are
+  AI-translated and haven't been reviewed by a native speaker.
 
 ## Building the executable
 

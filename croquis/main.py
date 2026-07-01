@@ -116,6 +116,7 @@ def _start():
                 config.keybindings,
                 on_exclude_image,
                 config.zen_mode,
+                config.language,
             )
 
         elif action == "main_menu":

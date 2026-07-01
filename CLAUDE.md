@@ -9,6 +9,11 @@ reference images from user-configured folders on a timer, full-screen, packaged 
 single Windows `.exe` via PyInstaller. See `README.md` for user-facing usage and
 `config.toml` format.
 
+The app is translatable (English/Japanese today) via a small hand-rolled catalog system
+in `croquis/i18n.py`/`croquis/locales/` — see the dedicated note below. Every
+user-facing string across `main_menu.py`, `config_editor.py`, and `session.py` routes
+through `translate(key, language)`.
+
 The menu/editor UI uses `ttk` (themed widgets) skinned by `sv-ttk`, applied once per
 `Tk()` root via `croquis/theme.py:apply_theme(tk, theme)`. `theme` is `Config.theme`
 (`"auto"`/`"light"`/`"dark"`, default `"auto"`) — `apply_theme` resolves `"light"`/
@@ -32,6 +37,7 @@ poetry run pytest           # run tests
 poetry run pytest croquis/tests/test_util.py::test_parse_timer  # single test
 poetry run pytest croquis/tests/test_model.py  # config/imageset/category helpers
 poetry run pytest croquis/tests/test_monochrome.py  # greyscale/sepia transform
+poetry run pytest croquis/tests/test_i18n.py  # translate() + ja catalog consistency
 poetry run ruff format      # format (== make format)
 poetry run ruff check       # lint — expect a large pre-existing count from the
                              # wildcard-import style below; don't try to fix those
@@ -192,7 +198,14 @@ the active screen's handlers are live).
   deliberately unvalidated here (any string round-trips fine) — `theme.apply_theme()`
   is the one place that interprets it, and it already treats anything other than
   `"light"`/`"dark"` as "auto-detect," so a garbage hand-edited value degrades
-  gracefully instead of needing a dataclass-level check.
+  gracefully instead of needing a dataclass-level check. `language: str = "en"`
+  follows the same pattern — unvalidated at the dataclass level (`i18n.translate()`
+  already degrades gracefully for an unknown language, falling back to the English
+  key). `Mode.get_label(language="en")` translates its "Manual"/"Timed"/"Click to go
+  to next image" return values but leaves the raw timer expression (e.g. "4×30s
+  3×1m") and `format_time()`'s output untranslated — those echo the user's own
+  `[mode.X].timers` config syntax back at them, and translating the `s`/`m` unit
+  letters would create a mismatch with what they'd actually type in `config.toml`.
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
   TOML template written out on first run). Keep `DEFAULT_CONFIG` in sync with `Config`'s
   fields — a first run with no `config.toml` constructs `Config(**toml.loads(DEFAULT_CONFIG))`
@@ -277,12 +290,17 @@ the active screen's handlers are live).
   rebind to) and keys already assigned to a different action, both via the same inline
   `error_var` label the rest of the editor uses (never `show_error_modal`, same
   reasoning as elsewhere in this file).
-  The General tab's Zen mode checkbox (`zen_mode_var`) and theme selector
-  (`theme_var`, a `ttk.OptionMenu` with `"auto"`/`"light"`/`"dark"` — same widget type
-  already used for "Default mode:" below it, for consistency within this file) both
-  sit directly under the window size field, outside the per-mode `body`/`form_frame`
-  area — they're top-level `Config` settings like `dimensions`, not scoped to an
-  individual mode. **`OPTIONS_WINDOW_SIZE` must be tall enough for the General tab's
+  The General tab's Zen mode checkbox (`zen_mode_var`), theme selector (`theme_var`),
+  and language selector (`language_var`) all sit directly under the window size field,
+  outside the per-mode `body`/`form_frame` area — they're top-level `Config` settings
+  like `dimensions`, not scoped to an individual mode. `theme_var`/`language_var` are
+  both `ttk.OptionMenu`s (same widget type already used for "Default mode:" below
+  them, for consistency within this file), but `language_var` stores the *display
+  label* ("English"/"日本語" from `LANGUAGE_LABELS`), not the raw code — `on_save()`
+  reverse-looks-up the code via `next(code for code, label in LANGUAGE_LABELS.items()
+  if label == language_var.get())`. `theme_var` doesn't need this indirection since
+  its raw values (`"auto"`/`"light"`/`"dark"`) are already short, unqualified English
+  words appropriate to show directly regardless of UI language. **`OPTIONS_WINDOW_SIZE` must be tall enough for the General tab's
   content or the Save/Cancel row at the bottom gets clipped** (a real shipped bug: the
   fixed `640x480` was 3px shorter than the tab's actual required height once the
   Keybindings tab and these two General-tab rows were added, so the buttons were
@@ -298,6 +316,49 @@ the active screen's handlers are live).
   above for why), and `MainMenuApp._on_config_saved()` (to re-apply live after an
   Options save). `sv_ttk.set_theme()` is safe to call repeatedly on the same root —
   that's how the live re-apply works, no special "already themed" guard needed.
+- `croquis/i18n.py` — `translate(key, language="en", **kwargs) -> str`: `key` is the
+  **English text itself** (gettext-style), not a synthetic namespaced key, so a
+  missing/untranslated key degrades to readable English rather than a raw key string.
+  Deliberately named `translate`, not the conventional gettext `_` — `_` is already
+  used as a throwaway variable in this exact codebase (`session.py`'s
+  `path, _, _ = self.imageset[self.index]`, also `main.py`/`util.py`), and a
+  wildcard-imported `_` translate function would be silently shadowed the moment any
+  function reassigns `_`, breaking every subsequent `_(...)` call in that scope.
+  `language` is passed explicitly by the caller (from `Config.language`), not read
+  from global state — keeps `translate()` a pure function, easy to unit test, no
+  import-order/global-mutation hazards. Hand-rolled dict catalogs, not `gettext`/
+  `.po`/`.mo` — no new dependency, and no `msgfmt` build tool (not present on Windows
+  by default) needed to compile anything; `croquis/locales/ja.py` is a plain
+  `TRANSLATIONS: dict[str, str]` that PyInstaller bundles automatically like any other
+  `.py` module (no `resource_path()`/`--add-data` needed, unlike `icon.ico`).
+  **Module-level string constants can't hold translatable text** — `constants.py` used
+  to have `RESUME_BUTTON_TEXT`/`EXTEND_TIMER_BUTTON_TEXT`/etc. as plain strings
+  computed once at import time; these were removed and replaced with `translate(...)`
+  calls made fresh at each widget-creation call site (inside `start_session()`/
+  `draw_menu()`, which already run fresh on every screen build/rebuild) — a constant
+  can't respond to a runtime language change. `MENU_BUTTON_TEXT = "☰"` stays a
+  constant since it's an icon glyph, not translatable text; same reasoning for the
+  "⏪"/"⏩" prev/next glyphs in `session.py`. **"Live apply on save" needs zero extra
+  plumbing** — Options can only be opened from the main menu (the menu bar is torn
+  down when a session starts), so there's no mid-session language-switch case;
+  `MainMenuApp._on_config_saved()` already fully tears down and rebuilds `MainMenuApp`
+  (see its note above) after *any* Options save, so once a screen's strings route
+  through `translate(key, self.config.language)`, a language change takes effect
+  immediately after Save the same way theme does. Deliberately left untranslated (not
+  an oversight): window titles built from the user's own data (`f"Croquis: {name}"` —
+  "Croquis" is the product's proper name), the progress counter (`f"{index+1}/{len}"`
+  — pure numeric notation, no linguistic content), `error_modal.py`'s "Fatal error"/
+  "Ok" (can fire before `config` loads at all, same reasoning as its theme handling),
+  and raw exception message text from `util.py`/`model.py` (e.g. `parse_timer`'s
+  `"'{t}' is not a valid time expression"`) — the *surrounding* UI text in
+  `config_editor.py`'s `error_var.set(...)` calls is translated
+  (`translate("Mode '{name}': {error}", ...)`), but the embedded exception text itself
+  stays English, consistent with `error_modal.py` being out of scope.
+  `LANGUAGE_LABELS = {"en": "English", "ja": "日本語"}` in `config_editor.py` is
+  deliberately **not** run through `translate()` — a language picker conventionally
+  names each language in its own script regardless of the currently active UI
+  language, so the dropdown always shows "English"/"日本語" no matter which one is
+  currently selected.
 
 **Codebase convention:** files use `from tkinter import *` / `from croquis.x import *`
 throughout (Tk constants like `FLAT`, `W`, `NW` are used unqualified). This is intentional
@@ -324,7 +385,12 @@ per the current `main_menu.py` pattern — reuse one set of widgets and update t
 instead of building one widget set per item and toggling visibility.
 
 **Testing Tkinter code without a display:** `croquis/tests/` covers pure logic only
-(`test_util.py`, `test_model.py`, `test_monochrome.py`) — no GUI tests are checked in.
+(`test_util.py`, `test_model.py`, `test_monochrome.py`, `test_i18n.py`) — no GUI tests
+are checked in. `test_i18n.py` includes a consistency check — for every key in
+`locales.ja.TRANSLATIONS`, the set of `{placeholder}` names in the English key must
+match the set in the Japanese value (via `re.findall(r"\{(\w+)\}", ...)`) — catching a
+translator typo (e.g. `{new_key}` vs `{key}`) that would otherwise only surface as a
+`KeyError` at runtime, in whichever language exposes it.
 When you do need to drive real Tk widgets to verify behavior, construct the actual
 `Tk()`/`Canvas`/app objects in a throwaway script (no `mainloop()` needed — call
 `tk.update()` after state changes and inspect via `winfo_ismapped()`, `winfo_manager()`,

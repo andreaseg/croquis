@@ -7,6 +7,7 @@ from croquis.constants import *
 from croquis.util import *
 from croquis.model import *
 from croquis.monochrome import apply_monochrome
+from croquis.i18n import translate
 
 
 class SessionApp:
@@ -24,6 +25,7 @@ class SessionApp:
         keybindings: dict[str, str] | None = None,
         on_exclude_image: Callable[[str], None] | None = None,
         zen_mode: bool = False,
+        language: str = "en",
     ):
         self.tk = tk
         self.timer = SessionApp.NOT_SET
@@ -34,6 +36,7 @@ class SessionApp:
         self.locations = list(locations)
         self.on_exclude_image = on_exclude_image or (lambda path: None)
         self.zen_mode = zen_mode
+        self.language = language
         self._zen_reveal_until: float = 0.0
         self._zen_reveal_after_id: str | None = None
         self.index = SessionApp.NOT_SET
@@ -103,7 +106,7 @@ class SessionApp:
         ):
             updated_text = ""
         else:
-            updated_text = f"{self.timer}s"
+            updated_text = translate("{n}s", self.language, n=self.timer)
 
         self.canvas.itemconfigure(self.timer_widget, text=updated_text)
         self.canvas.itemconfigure(self.timer_widget_shadow, text=updated_text)
@@ -259,7 +262,11 @@ class SessionApp:
             self.zen_reveal()
 
         display_path = shorten_to_location(path, self.locations)
-        display_text = f"{display_path}{' (mirrored)' if is_mirrored else ''}"
+        display_text = (
+            f"{display_path} {translate('(mirrored)', self.language)}"
+            if is_mirrored
+            else display_path
+        )
         self.canvas.itemconfigure(self.path_widget, text=display_text)
         self.canvas.itemconfigure(self.path_widget_shadow, text=display_text)
         progress_text = f"{self.index + 1}/{len(self.imageset)}"
@@ -431,6 +438,7 @@ def start_session(
     keybindings: dict[str, str] | None = None,
     on_exclude_image: Callable[[str], None] | None = None,
     zen_mode: bool = False,
+    language: str = "en",
 ):
     if mode.manual:
         manual_timer_placeholder = int(1)
@@ -463,6 +471,7 @@ def start_session(
         keybindings,
         on_exclude_image,
         zen_mode,
+        language,
     )
     app.imageset = image_paths
     app.main_menu_callback = callback
@@ -472,7 +481,7 @@ def start_session(
     app.end_of_sequence_text_widget = canvas.create_text(
         width / 2,
         height / 2 - 60,
-        text="[END OF SESSION]",
+        text=translate("[END OF SESSION]", language),
         font=PAUSE_FONT,
         fill=PAUSE_TEXT_COLOR,
         anchor="center",
@@ -480,7 +489,7 @@ def start_session(
     )
     btn = Button(
         tk,
-        text="Back to menu",
+        text=translate("Back to menu", language),
         command=app.restart,
         width=16,
         height=2,
@@ -500,7 +509,7 @@ def start_session(
     app.pause_text_widget = canvas.create_text(
         width / 2,
         height / 2 + MENU_TITLE_Y_OFFSET,
-        text="[PAUSED]",
+        text=translate("[PAUSED]", language),
         font=PAUSE_FONT,
         fill=PAUSE_TEXT_COLOR,
         anchor="center",
@@ -629,14 +638,19 @@ def start_session(
             state=HIDDEN,
         )
 
-    app.resume_button_widget = _menu_overlay_button(RESUME_BUTTON_TEXT, app.close_menu)
+    app.resume_button_widget = _menu_overlay_button(
+        translate("Resume", language), app.close_menu
+    )
     app.exclude_button_widget = _menu_overlay_button(
-        EXCLUDE_BUTTON_TEXT, app.exclude_current_image
+        translate("Skip / Exclude Image", language), app.exclude_current_image
     )
     app.extend_timer_button_widget = _menu_overlay_button(
-        EXTEND_TIMER_BUTTON_TEXT, app.extend_timer
+        translate("Extend Timer (+{n}s)", language, n=EXTEND_TIMER_SECONDS),
+        app.extend_timer,
     )
-    app.quit_button_widget = _menu_overlay_button(QUIT_BUTTON_TEXT, app.quit_session)
+    app.quit_button_widget = _menu_overlay_button(
+        translate("Quit to Menu", language), app.quit_session
+    )
     app.reposition_menu_buttons()
 
     if mode.manual:

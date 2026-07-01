@@ -55,18 +55,18 @@ MENU_TITLE_Y_OFFSET = -150
 MENU_BUTTON_Y_OFFSET = -60
 MENU_BUTTON_SPACING = 73
 
+# MENU_BUTTON_TEXT is an icon glyph, not translatable text, so it stays a
+# plain constant. The other button-label strings that used to live here
+# (RESUME_BUTTON_TEXT, EXCLUDE_BUTTON_TEXT, EXTEND_TIMER_BUTTON_TEXT,
+# QUIT_BUTTON_TEXT, MAIN_MENU_START_BUTTON_TEXT,
+# MAIN_MENU_MONOCHROME_TOGGLE_TEXT) moved to translate(...) calls at their
+# widget-creation call sites - a module-level constant is computed once at
+# import time and can't respond to a runtime language change.
 MENU_BUTTON_TEXT = "☰"
-RESUME_BUTTON_TEXT = "Resume"
-EXCLUDE_BUTTON_TEXT = "Skip / Exclude Image"
-EXTEND_TIMER_BUTTON_TEXT = f"Extend Timer (+{EXTEND_TIMER_SECONDS}s)"
-QUIT_BUTTON_TEXT = "Quit to Menu"
 
 # Rebindable session keyboard shortcuts. Space is always also bound to "menu"
 # as a fixed, non-rebindable alias - see session.py.
 DEFAULT_KEYBINDINGS = {"menu": "Escape", "prev": "Left", "next": "Right"}
-
-MAIN_MENU_START_BUTTON_TEXT = "Start Session"
-MAIN_MENU_MONOCHROME_TOGGLE_TEXT = "Monochrome"
 
 # ITU-R BT.601 perceptual luma weights - matches Pillow's own "L" (greyscale)
 # conversion, used both directly and as the basis for the sepia toning below.
@@ -95,6 +95,7 @@ image_locations = ["images"]
 excluded_images = []
 zen_mode = false
 theme = "auto"
+language = "en"
 
 [keybindings]
 menu = "Escape"
