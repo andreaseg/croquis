@@ -50,13 +50,17 @@ the active screen's handlers are live).
 
 - `croquis/main_menu.py` — `MainMenuApp`: all `ttk` widgets, responsive (`columnconfigure`/
   `rowconfigure` weights + `sticky="nsew"`, not fixed pixel sizes — resizes/reflows with
-  the window). Check one or more imagesets (`ttk.Checkbutton`s, multi-select) + pick a
-  mode (`ttk.Radiobutton`s bound to one `StringVar` — native mutual-exclusion, no manual
+  the window). Holds the full `Config` object (not just the imageset/mode/category
+  sub-dicts) plus the config path, because it also owns the Options/Configure Images
+  menu bar (see `config_editor.py` below for why that lives here and not in `main.py`).
+  Check one or more imagesets (`ttk.Checkbutton`s, multi-select) + pick a mode
+  (`ttk.Radiobutton`s bound to one `StringVar` — native mutual-exclusion, no manual
   highlight-color toggling), "Start Session" merges the checked imagesets' tags/paths
-  (`model.merge_imagesets`) and hands off to `session.start_session(...)`. Category
-  buttons are one-shot presets — clicking one replaces the current checkbox selection
-  with that category's matches (`model.imagesets_matching_category`); they carry no
-  persistent selection state of their own.
+  (`model.merge_imagesets`) and hands off to `session.start_session(...)`, passing
+  `self.config.image_locations` through for path resolution. Category buttons are
+  one-shot presets — clicking one replaces the current checkbox selection with that
+  category's matches (`model.imagesets_matching_category`); they carry no persistent
+  selection state of their own.
 - `croquis/session.py` — `SessionApp`: drives the actual timed/manual image sequence
   (`tick()` reschedules itself via `tk.after(1000, ...)`; `go_to_image(new_index)` is the
   single state-transition point — it's used both for advancing/going back *and* for
@@ -77,11 +81,30 @@ the active screen's handlers are live).
   used both by the CLI (resolving a category name passed as the session argument) and
   by `MainMenuApp` (category-button presets, multi-select merge at session start). They
   are never persisted back to `config.toml` — only `save_config` writes to disk.
+  **Any new `Config` field needs a default** (e.g. `image_locations: list[str] =
+  field(default_factory=list)`) — this dataclass is constructed straight from
+  `toml.loads()` of whatever's on disk, so a required field with no default breaks
+  loading every `config.toml` written before that field existed (this exact class of
+  bug shipped once already — `category` — see git history / `DEFAULT_CONFIG` below).
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
-  TOML template written out on first run).
-- `croquis/util.py` — config/timer parsing (`parse_timer`, `parse_bool`), image discovery
-  (`images_in_path`, walks folders recursively), `resource_path()` (PyInstaller `_MEIPASS`
-  vs dev-mode path resolution — needed for `icon.ico`).
+  TOML template written out on first run). Keep `DEFAULT_CONFIG` in sync with `Config`'s
+  fields — a first run with no `config.toml` constructs `Config(**toml.loads(DEFAULT_CONFIG))`
+  directly, so a field this template doesn't demonstrate is a field new users never see,
+  and a required field it's missing entirely is a crash on first launch.
+- `croquis/util.py` — config/timer parsing (`parse_timer`, `parse_bool`), image
+  discovery (`images_in_path`, walks folders recursively). Path resolution for
+  `image_locations`: `resolve_image_path(path, locations)` tries `os.path.join(location,
+  path)` for each location and returns the first that `os.path.isdir`s, falling back to
+  the raw path; `images_in_path`/`generate_random_image_sequence` always prepend `"."`
+  to whatever locations they're given before resolving (so the app's own directory is
+  never optional, regardless of config), which is also why old CWD-relative paths never
+  needed migrating when this feature was added. `shorten_to_location(path, locations)`
+  is the inverse, used by the config editor's "Add folder..." picker so newly-added
+  folders get stored relative to whichever location contains them (shortest match wins)
+  instead of as a full absolute path — remember `os.path.relpath` raises `ValueError`
+  for cross-drive paths on Windows, must be caught. `resource_path()` (PyInstaller
+  `_MEIPASS` vs dev-mode path resolution — needed for `icon.ico`) is unrelated to any of
+  this, a separate concern for bundled app resources, not user image folders.
 - `croquis/error_modal.py` — any uncaught exception from `start()` in `main.py` is caught
   and shown in a separate fatal-error Tk window (`show_error_modal`), then exits. It
   builds its own standalone `Tk()` (not a `Toplevel` off the main root — it can fire
@@ -89,21 +112,26 @@ the active screen's handlers are live).
   inheriting it. If a change can throw during startup/event handlers, know that it
   surfaces here rather than a traceback in a console.
 - `croquis/config_editor.py` — `open_options_editor`/`open_imageset_editor`, opened from
-  a native `tk.Menu` bar set up in `main.py` (Options.../Configure Images...). Each opens
-  a modal `Toplevel` of `ttk` widgets (`ttk.Treeview(show="tree")` stands in for the
-  4 name/path lists — `ttk` has no themed `Listbox` — see the iid gotcha below) that
-  works on `copy.deepcopy(config)` so Cancel discards cleanly; on Save it validates
-  inline (an in-window error `ttk.Label`, never `show_error_modal` — that calls
-  `sys.exit`, which would kill the app over a typo), calls `save_config`, then
-  `model.replace_config_fields(config, working)` to commit the validated copy into the
-  live `Config` object `main.py` already holds by reference, then an `on_saved` callback
-  that re-enters `select_state("main_menu")` to redraw. **`Treeview` insert with a
-  duplicate `iid` raises `TclError`, it does not silently coexist** (unlike `Listbox`,
-  which just adds a visual duplicate row) — this matters specifically for the
-  imageset-folder-paths list, since `ImageSet.paths` has no uniqueness constraint and a
-  user can click "Add folder..." on the same folder twice; that list uses a positional
-  synthetic iid (`str(index)`, regenerated on every refresh) rather than the path string
-  itself, for exactly this reason.
+  a native `tk.Menu` bar. **The menu bar is built in `MainMenuApp.draw_menu()` and torn
+  down in `delete_children()`, not in `main.py`** — it used to live in `main.py`
+  attached once at startup, which meant Options/Configure Images stayed visible during
+  a session; its lifecycle now matches the main menu screen's, since `delete_children()`
+  already runs both when returning to the menu and (via `MainMenuApp.start_session()`)
+  when a session starts. Each editor opens a modal `Toplevel` of `ttk` widgets
+  (`ttk.Treeview(show="tree")` stands in for the list widgets — `ttk` has no themed
+  `Listbox` — see the iid gotcha below) that works on `copy.deepcopy(config)` so Cancel
+  discards cleanly; on Save it validates inline (an in-window error `ttk.Label`, never
+  `show_error_modal` — that calls `sys.exit`, which would kill the app over a typo),
+  calls `save_config`, then `model.replace_config_fields(config, working)` to commit the
+  validated copy into the live `Config` object, then an `on_saved` callback
+  (`MainMenuApp._on_config_saved`) that re-enters `select_state("main_menu")` to redraw.
+  **`Treeview` insert with a duplicate `iid` raises `TclError`, it does not silently
+  coexist** (unlike `Listbox`, which just adds a visual duplicate row) — this matters
+  for any folder list, since paths (`ImageSet.paths`, `Config.image_locations`) have no
+  uniqueness constraint and a user can click "Add folder..." on the same folder twice;
+  `_build_folder_list()` (shared by the per-imageset paths list and the Image Locations
+  tab) uses a positional synthetic iid (`str(index)`, regenerated on every refresh)
+  rather than the path string itself, for exactly this reason.
 - `croquis/theme.py` — `apply_theme(tk)`: one-line wrapper around
   `sv_ttk.set_theme(darkdetect.theme(), root=tk)`. Must be called once per `Tk()` root
   that contains `ttk` widgets (themes are per-root, not process-global) — currently

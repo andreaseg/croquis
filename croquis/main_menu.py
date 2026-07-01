@@ -246,6 +246,7 @@ class MainMenuApp:
                 self.modes[picked_mode],
                 (self.tk.winfo_width(), self.tk.winfo_height()),
                 self.main_menu_callback,
+                self.config.image_locations,
             )
         except Exception as e:
             show_error_modal(e)

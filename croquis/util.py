@@ -24,9 +24,9 @@ def scale_rect_to_bounds(rect: tuple[int, int], bounds: tuple[int, int]) -> floa
 
 
 def generate_random_image_sequence(
-    paths: list[str], timers: str
+    paths: list[str], timers: str, locations: Iterable[str] = ()
 ) -> list[tuple[str, int, bool]]:
-    potential_images = images_in_path(paths)
+    potential_images = images_in_path(paths, locations)
 
     timers = parse_timer(timers)
 
@@ -38,10 +38,33 @@ def generate_random_image_sequence(
     return list(zip(random.sample(potential_images, len(timers)), timers, is_mirrored))
 
 
-def images_in_path(paths: list[str]) -> list[str]:
+def resolve_image_path(path: str, locations: Iterable[str]) -> str:
+    for location in locations:
+        candidate = os.path.join(location, path)
+        if os.path.isdir(candidate):
+            return candidate
+    return path
+
+
+def shorten_to_location(path: str, locations: Iterable[str]) -> str:
+    abs_path = os.path.abspath(path)
+    candidates = [path]
+    for location in [".", *locations]:
+        try:
+            rel = os.path.relpath(abs_path, os.path.abspath(location))
+        except ValueError:
+            continue
+        if not rel.startswith(".."):
+            candidates.append(rel)
+    return min(candidates, key=len)
+
+
+def images_in_path(paths: list[str], locations: Iterable[str] = ()) -> list[str]:
+    search_locations = [".", *locations]
     images = []
     for path in paths:
-        for dirpath, _dirnames, filenames in os.walk(path):
+        resolved = resolve_image_path(path, search_locations)
+        for dirpath, _dirnames, filenames in os.walk(resolved):
             images.extend([os.path.join(dirpath, filename) for filename in filenames])
     return images
 

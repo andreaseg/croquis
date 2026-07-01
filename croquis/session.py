@@ -1,6 +1,6 @@
 from tkinter import *
 from PIL import Image, ImageTk, ImageOps
-from typing import Callable
+from typing import Callable, Iterable
 
 from croquis.constants import *
 from croquis.util import *
@@ -294,19 +294,22 @@ def start_session(
     mode: Mode,
     dimensions: tuple[int, int],
     callback: Callable[[str], None],
+    locations: Iterable[str] = (),
 ):
     if mode.manual:
         manual_timer_placeholder = int(1)
         image_paths = list(
             map(
                 lambda path: (path, manual_timer_placeholder, False),
-                images_in_path(imageset.paths),
+                images_in_path(imageset.paths, locations),
             )
         )
         random.shuffle(image_paths)
         print(f"Generated croquis plan of {len(image_paths)} images")
     else:
-        image_paths = generate_random_image_sequence(imageset.paths, mode.timers)
+        image_paths = generate_random_image_sequence(
+            imageset.paths, mode.timers, locations
+        )
         print("Generated croquis plan:")
         for image_path, image_timer, is_flipped in image_paths:
             print(

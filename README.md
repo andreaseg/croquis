@@ -15,9 +15,12 @@ controls.
 - **Categories** — one-click presets: clicking a category checks every image set whose
   tags match it, so e.g. a "Figure" category can select every image set tagged `figure`
   without checking each one by hand. You can still fine-tune the selection afterward.
-- **In-app configuration** — add/edit/remove image sets, categories, modes, and the
-  window size from the **Options...** / **Configure Images...** menu, no need to hand-edit
-  `config.toml`.
+- **In-app configuration** — add/edit/remove image sets, categories, modes, the
+  window size, and image locations from the **Options...** / **Configure Images...**
+  menu, no need to hand-edit `config.toml`.
+- **Image locations** — configure one or more base folders to search, so image set
+  paths can just be a folder name instead of a full path. The app's own directory is
+  always searched too.
 - **Follows your OS light/dark theme** in the menu and config editor.
 - **Pause, skip back/forward, random mirroring** of images during a session.
 - Packaged as a single `croquis.exe` — no Python install required to run it.
@@ -62,6 +65,7 @@ every artist's image library is different. Example:
 
 ```toml
 dimensions = "1920x1200"
+image_locations = ["images", "D:/ReferenceLibrary"]
 
 [mode.Classic]
 default = "True"
@@ -73,19 +77,25 @@ manual = "True"
 [imageset."Portrait Male"]
 tags = ["portrait", "male"]
 paths = [
-    "C:/references/portraits/male",
+    "Portraits/Male",
 ]
 
 [category."Portrait"]
 tags = ["portrait"]
 ```
 
+- **`image_locations`** — base folders to search for image set paths, in order. The
+  app's own current directory is always searched too, regardless of this setting, so
+  existing full/relative paths keep working unchanged.
 - **`[mode.<name>]`** — a drawing mode. Either `timers = "<n>*<duration> ..."`
   (`s`econds/`m`inutes, e.g. `"3*30s 2m"`) for a timed session, or `manual = "True"` for a
   click-to-advance session. Mark one mode `default = "True"` to preselect it in the menu.
 - **`[imageset.<name>]`** — a named group of reference images: a list of folder `paths`
-  (searched recursively) and `tags` describing what's in them. Each one shows up as a
-  checkbox in the main menu; check as many as you want before starting a session.
+  (searched recursively) and `tags` describing what's in them. Each path is resolved
+  against `image_locations` (and the app's directory) — so `"Portraits/Male"` above
+  resolves to `"images/Portraits/Male"` via the `images` location, or you can still use
+  a full path directly. Each imageset shows up as a checkbox in the main menu; check as
+  many as you want before starting a session.
 - **`[category.<name>]`** — a one-click preset button in the main menu: clicking it
   checks every `[imageset]` whose tags are a superset of the category's tags. Useful for
   "give me everything tagged `figure`" without checking each image set by hand.

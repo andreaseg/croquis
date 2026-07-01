@@ -104,6 +104,7 @@ def _start():
                 mode,
                 (width, height),
                 select_state,
+                config.image_locations,
             )
 
         elif action == "main_menu":

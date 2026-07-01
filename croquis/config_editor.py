@@ -5,7 +5,7 @@ from tkinter import Tk, Toplevel, StringVar, BooleanVar, END, LEFT, RIGHT, TOP, 
 from tkinter import simpledialog, messagebox, filedialog, ttk
 
 from croquis.model import *
-from croquis.util import parse_timer
+from croquis.util import parse_timer, shorten_to_location
 
 OPTIONS_WINDOW_SIZE = "640x480"
 IMAGESET_WINDOW_SIZE = "780x520"
@@ -49,6 +49,44 @@ def _build_tree_crud(
     ttk.Button(button_frame, text="Remove", command=do_remove).pack(side=LEFT, padx=2)
 
     return tree
+
+
+def _build_folder_list(
+    parent: ttk.Frame,
+    paths: list[str],
+    shorten: Callable[[str], str] = lambda p: p,
+) -> tuple[ttk.Treeview, Callable[[], None]]:
+    tree = ttk.Treeview(parent, show="tree", selectmode="browse", height=10)
+    tree.column("#0", width=480)
+    tree.pack(anchor=W)
+
+    def refresh():
+        tree.delete(*tree.get_children())
+        for idx, path in enumerate(paths):
+            tree.insert("", "end", iid=str(idx), text=path)
+
+    def on_add_folder():
+        picked = filedialog.askdirectory(parent=parent)
+        if picked:
+            paths.append(shorten(picked))
+            refresh()
+
+    def on_remove_folder():
+        selection = tree.selection()
+        if selection:
+            del paths[int(selection[0])]
+            refresh()
+
+    button_frame = ttk.Frame(parent)
+    button_frame.pack(anchor=W, pady=4)
+    ttk.Button(button_frame, text="Add folder...", command=on_add_folder).pack(
+        side=LEFT, padx=2
+    )
+    ttk.Button(button_frame, text="Remove selected", command=on_remove_folder).pack(
+        side=LEFT, padx=2
+    )
+
+    return tree, refresh
 
 
 def _refresh_tree(tree: ttk.Treeview, names: list[str], select: str | None = None):
@@ -257,18 +295,15 @@ def open_imageset_editor(
 
     imageset_tab = ttk.Frame(notebook)
     category_tab = ttk.Frame(notebook)
+    location_tab = ttk.Frame(notebook)
     notebook.add(imageset_tab, text="Imagesets")
     notebook.add(category_tab, text="Categories")
+    notebook.add(location_tab, text="Image Locations")
 
     # --- Imagesets tab ---
 
     selected_imageset: list[str | None] = [None]
     imageset_paths: list[str] = []
-
-    def refresh_paths_tree():
-        imageset_paths_tree.delete(*imageset_paths_tree.get_children())
-        for idx, path in enumerate(imageset_paths):
-            imageset_paths_tree.insert("", "end", iid=str(idx), text=path)
 
     def commit_imageset_form():
         name = selected_imageset[0]
@@ -341,32 +376,11 @@ def open_imageset_editor(
     ttk.Entry(imageset_form, textvariable=imageset_tags_var, width=44).pack(anchor=W)
 
     ttk.Label(imageset_form, text="Folders:").pack(anchor=W, pady=(8, 0))
-    imageset_paths_tree = ttk.Treeview(
-        imageset_form, show="tree", selectmode="browse", height=10
+    imageset_paths_tree, refresh_paths_tree = _build_folder_list(
+        imageset_form,
+        imageset_paths,
+        shorten=lambda p: shorten_to_location(p, working.image_locations),
     )
-    imageset_paths_tree.column("#0", width=480)
-    imageset_paths_tree.pack(anchor=W)
-
-    def on_add_folder():
-        path = filedialog.askdirectory(parent=window)
-        if path:
-            imageset_paths.append(path)
-            refresh_paths_tree()
-
-    def on_remove_folder():
-        selection = imageset_paths_tree.selection()
-        if selection:
-            del imageset_paths[int(selection[0])]
-            refresh_paths_tree()
-
-    path_button_frame = ttk.Frame(imageset_form)
-    path_button_frame.pack(anchor=W, pady=4)
-    ttk.Button(path_button_frame, text="Add folder...", command=on_add_folder).pack(
-        side=LEFT, padx=2
-    )
-    ttk.Button(
-        path_button_frame, text="Remove selected", command=on_remove_folder
-    ).pack(side=LEFT, padx=2)
 
     # --- Categories tab ---
 
@@ -434,6 +448,20 @@ def open_imageset_editor(
     ttk.Label(category_form, text="Tags (comma-separated):").pack(anchor=W)
     category_tags_var = StringVar(value="")
     ttk.Entry(category_form, textvariable=category_tags_var, width=44).pack(anchor=W)
+
+    # --- Image Locations tab ---
+
+    ttk.Label(
+        location_tab,
+        text="Folders to search for imageset paths, in addition to the app's own directory:",
+        padding=(8, 8, 8, 0),
+    ).pack(anchor=W)
+    location_form = ttk.Frame(location_tab)
+    location_form.pack(side=LEFT, fill=BOTH, expand=True, padx=8, pady=8)
+    location_tree, refresh_locations = _build_folder_list(
+        location_form, working.image_locations
+    )
+    refresh_locations()
 
     error_var = StringVar(value="")
     _build_error_label(window, error_var)

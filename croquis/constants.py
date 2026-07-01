@@ -35,6 +35,7 @@ MAIN_MENU_ROW_WEIGHTS = [0, 3, 1]
 
 DEFAULT_CONFIG = """
 dimensions="1920x1200"
+image_locations = ["images"]
 
 [mode.classic]
 default = "True"

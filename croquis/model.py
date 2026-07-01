@@ -1,7 +1,7 @@
 import re
 import toml
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Iterable
 from .util import parse_bool, format_time, sort_tags
 
@@ -49,6 +49,7 @@ class Config:
     imageset: dict[str, ImageSet]
     mode: dict[str, Mode]
     category: dict[str, Category]
+    image_locations: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         self.imageset = {k: ImageSet(**v) for (k, v) in self.imageset.items()}
