@@ -95,8 +95,23 @@ the active screen's handlers are live).
   already reflects the saved values at that point (`replace_config_fields` ran inside
   `config_editor.py`'s `on_save()` before this callback fires).
 - `croquis/session.py` — `SessionApp`: drives the actual timed/manual image sequence
-  (`tick()` reschedules itself via `tk.after(1000, ...)`; `go_to_image(new_index)` is the
-  single state-transition point — it's used both for advancing/going back *and* for
+  (`tick()` reschedules itself via `tk.after(1000, ...)`, storing the handle in
+  `self._tick_after_id` so `delete_children()` can `after_cancel()` it — **this was a
+  real shipped bug**: the handle used to be discarded, so quitting a timed session
+  left one already-scheduled tick pending (ticks reschedule *before* the user can
+  react, so this was true almost any time a session was quit); up to ~1s later it
+  could fire after a brand-new session had already started on the same shared
+  `Canvas`, and if it happened to land exactly when the old session's per-image timer
+  crossed zero, it called `go_to_image()`/`load_image()` on the torn-down instance —
+  which creates a fresh, entirely untracked `canvas.create_image(...)` that nothing
+  ever cleans up (its "stale" widget IDs on `itemconfigure` are silent no-ops, *not*
+  errors, confirmed by testing — only `create_*` calls actually leak). Symptom: a
+  stray "ghost" image stuck on screen in a later session, since the new session has
+  no way of knowing the orphaned item exists. `tick()` also has a belt-and-suspenders
+  `if self.has_ended: return` guard at its top, matching `_apply_zen_visibility()`'s
+  existing guard, in case any future path leaves a tick in flight some other way.
+  `go_to_image(new_index)` is the single state-transition point — it's used both for
+  advancing/going back *and* for
   redrawing the current image on window resize, so it has to distinguish "new image"
   (reset the per-image timer) from "same image, just resized" (keep the timer). `-1`
   (`SessionApp.NOT_SET`) does double duty as both "no timer running" and "before the

@@ -39,6 +39,7 @@ class SessionApp:
         self.language = language
         self._zen_reveal_until: float = 0.0
         self._zen_reveal_after_id: str | None = None
+        self._tick_after_id: str | None = None
         self.index = SessionApp.NOT_SET
         self.imageset: list[tuple[str, int, bool]] | None = None
         self.canvas: Canvas | None = canvas
@@ -86,6 +87,17 @@ class SessionApp:
         tk.bind("<Configure>", lambda e: self.configure(e))
 
     def tick(self):
+        if self.has_ended:
+            # Defends against a tick that was already queued via tk.after()
+            # firing after delete_children() tore this session down (its
+            # after() handle is cancelled there too, but this guard is a
+            # second line of defense against the exact class of bug that
+            # was - see git history: an uncancelled tick() firing after
+            # teardown called go_to_image()/load_image(), which created a
+            # brand-new, untracked image widget on the shared canvas that
+            # the next session had no way of knowing about or cleaning up).
+            return
+
         if not self.is_paused:
             self.timer = max(self.timer - 1, SessionApp.NOT_SET)
 
@@ -96,7 +108,7 @@ class SessionApp:
         self._apply_zen_visibility()
 
         if not self.has_ended:
-            self.tk.after(1000, self.tick)
+            self._tick_after_id = self.tk.after(1000, self.tick)
 
     def update_timer_text(self):
         if (
@@ -399,6 +411,9 @@ class SessionApp:
         if self._zen_reveal_after_id is not None:
             self.tk.after_cancel(self._zen_reveal_after_id)
             self._zen_reveal_after_id = None
+        if self._tick_after_id is not None:
+            self.tk.after_cancel(self._tick_after_id)
+            self._tick_after_id = None
         self.canvas.delete(self.path_widget)
         self.canvas.delete(self.path_widget_shadow)
         self.canvas.delete(self.progress_widget)
