@@ -61,6 +61,7 @@ class Config:
     zen_mode: bool = False
     theme: str = "auto"
     language: str = "en"
+    monochrome_default: bool = False
 
     def __post_init__(self):
         self.imageset = {k: ImageSet(**v) for (k, v) in self.imageset.items()}

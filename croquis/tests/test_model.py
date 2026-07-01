@@ -142,6 +142,7 @@ def test_config_loads_with_defaults_when_keybindings_and_excluded_images_missing
     assert loaded.zen_mode is False
     assert loaded.theme == "auto"
     assert loaded.language == "en"
+    assert loaded.monochrome_default is False
 
 
 def test_zen_mode_round_trips(tmp_path):
@@ -178,3 +179,15 @@ def test_language_round_trips(tmp_path):
 
     assert loaded == config
     assert loaded.language == "ja"
+
+
+def test_monochrome_default_round_trips(tmp_path):
+    config = make_config()
+    config.monochrome_default = True
+    path = str(tmp_path / "config.toml")
+
+    save_config(config, path)
+    loaded = load_config(path)
+
+    assert loaded == config
+    assert loaded.monochrome_default is True

@@ -31,7 +31,7 @@ class MainMenuApp:
         self.categories: dict[str, Category] = config.category
         self.picked_imagesets: set[str] = set()
         self.mode_var: StringVar = StringVar(value="")
-        self.monochrome_var: BooleanVar = BooleanVar(value=False)
+        self.monochrome_var: BooleanVar = BooleanVar(value=config.monochrome_default)
         self.menu_frame: ttk.Frame | None = None
         self.menu_bar: Menu | None = None
 

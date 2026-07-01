@@ -43,6 +43,7 @@ TRANSLATIONS: dict[str, str] = {
     "Keybindings": "キー割り当て",
     "Window size (WIDTHxHEIGHT):": "ウィンドウサイズ (幅x高さ):",
     "Zen mode (hide session UI until needed)": "禅モード（必要になるまでセッションUIを非表示）",
+    "Monochrome by default": "デフォルトでモノクロ",
     "Theme:": "テーマ:",
     "Language:": "言語:",
     "Add mode": "モードを追加",

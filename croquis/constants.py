@@ -96,6 +96,7 @@ excluded_images = []
 zen_mode = false
 theme = "auto"
 language = "en"
+monochrome_default = false
 
 [keybindings]
 menu = "Escape"

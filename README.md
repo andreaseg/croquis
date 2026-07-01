@@ -26,7 +26,8 @@ controls.
 - **Monochrome mode** — a toggle above "Start Session" that converts images to a
   perceptual greyscale with a slight sepia tint (neutral in the shadows, warm in the
   highlights, like graphite on paper), for practicing values without color as a
-  distraction.
+  distraction. Turn it on by default from **Options... → General** if you always want
+  to start with it checked.
 - **In-session menu** — press Escape (or click the ☰ button, top-left) to pause and
   bring up a menu: Resume, Skip / Exclude Image, Extend Timer (+30s, timed sessions
   only), and Quit to Menu. Excluding an image is permanent — it's saved to
@@ -113,6 +114,7 @@ next = "Right"
 zen_mode = false
 theme = "auto"
 language = "en"
+monochrome_default = false
 ```
 
 - **`image_locations`** — base folders to search for image set paths, in order. The
@@ -143,6 +145,8 @@ language = "en"
 - **`language`** — `"en"` or `"ja"`. Editable via **Options... → General**; defaults to
   `"en"`. Translates the menu, config editor, and session UI; the Japanese strings are
   AI-translated and haven't been reviewed by a native speaker.
+- **`monochrome_default`** — whether the main menu's Monochrome checkbox starts
+  checked. Editable via **Options... → General**; defaults to `false`.
 
 ## Building the executable
 

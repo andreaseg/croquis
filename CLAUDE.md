@@ -75,7 +75,11 @@ the active screen's handlers are live).
   (`model.merge_imagesets`) and hands off to `session.start_session(...)`, passing
   `self.config.image_locations` through for path resolution. A `ttk.Checkbutton`
   ("Monochrome") above the Start Session button is a plain runtime `BooleanVar` on
-  `MainMenuApp`, not persisted to `config.toml` — it's read once when a session starts
+  `MainMenuApp`, seeded from `Config.monochrome_default` (`__init__`'s
+  `BooleanVar(value=config.monochrome_default)`) but not itself written back to
+  `config.toml` when toggled — only its *starting* checked state is persisted
+  (`Config.monochrome_default`, editable via Options → General); the live
+  on/off state during a given main-menu session is read once when a session starts
   and passed straight through to `session.start_session(..., monochrome=...)`. Category
   buttons are one-shot presets — clicking one replaces the current checkbox selection
   with that category's matches (`model.imagesets_matching_category`); they carry no
@@ -206,6 +210,10 @@ the active screen's handlers are live).
   3×1m") and `format_time()`'s output untranslated — those echo the user's own
   `[mode.X].timers` config syntax back at them, and translating the `s`/`m` unit
   letters would create a mismatch with what they'd actually type in `config.toml`.
+  `monochrome_default: bool = False` follows the plain-bool pattern established by
+  `zen_mode` — it only seeds `MainMenuApp.monochrome_var`'s initial checked state (see
+  `main_menu.py` above), it isn't itself mutated when the checkbox is toggled during a
+  session.
 - `croquis/constants.py` — every layout/color magic number plus `DEFAULT_CONFIG` (the
   TOML template written out on first run). Keep `DEFAULT_CONFIG` in sync with `Config`'s
   fields — a first run with no `config.toml` constructs `Config(**toml.loads(DEFAULT_CONFIG))`

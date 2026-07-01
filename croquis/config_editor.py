@@ -231,6 +231,13 @@ def open_options_editor(
         variable=zen_mode_var,
     ).pack(side=TOP, anchor=W, padx=8, pady=(0, 8))
 
+    monochrome_default_var = BooleanVar(value=working.monochrome_default)
+    ttk.Checkbutton(
+        general_tab,
+        text=translate("Monochrome by default", language),
+        variable=monochrome_default_var,
+    ).pack(side=TOP, anchor=W, padx=8, pady=(0, 8))
+
     theme_frame = ttk.Frame(general_tab)
     theme_frame.pack(side=TOP, fill=X, padx=8, pady=(0, 8))
     ttk.Label(theme_frame, text=translate("Theme:", language)).pack(side=LEFT)
@@ -456,6 +463,7 @@ def open_options_editor(
 
         working.dimensions = dimensions_var.get().strip()
         working.zen_mode = zen_mode_var.get()
+        working.monochrome_default = monochrome_default_var.get()
         working.theme = theme_var.get()
         working.language = next(
             code
