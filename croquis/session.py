@@ -18,6 +18,7 @@ class SessionApp:
         title: str,
         geometry: tuple[int, int],
         monochrome: bool = False,
+        locations: Iterable[str] = (),
     ):
         self.tk = tk
         self.timer = SessionApp.NOT_SET
@@ -25,6 +26,7 @@ class SessionApp:
         self.is_manual = False
         self.has_ended = False
         self.monochrome = monochrome
+        self.locations = list(locations)
         self.index = SessionApp.NOT_SET
         self.imageset: list[tuple[str, int, bool]] | None = None
         self.canvas: Canvas | None = canvas
@@ -187,10 +189,12 @@ class SessionApp:
         if new_index != previous_index:
             self.timer = time
 
+        display_path = shorten_to_location(path, self.locations)
         self.canvas.itemconfigure(
-            self.path_widget, text=f"{path}{' (mirrored)' if is_mirrored else ''}"
+            self.path_widget,
+            text=f"{display_path}{' (mirrored)' if is_mirrored else ''}",
         )
-        self.canvas.itemconfigure(self.path_widget_shadow, text=path)
+        self.canvas.itemconfigure(self.path_widget_shadow, text=display_path)
         progress_text = f"{self.index + 1}/{len(self.imageset)}"
         self.canvas.itemconfigure(self.progress_widget, text=progress_text)
         self.canvas.itemconfigure(self.progress_widget_shadow, text=progress_text)
@@ -328,7 +332,7 @@ def start_session(
                 f" - '{image_path}'{' (mirrored)' if is_flipped else ''} for {image_timer}s"
             )
 
-    app = SessionApp(tk, canvas, f"Croquis: {name}", dimensions, monochrome)
+    app = SessionApp(tk, canvas, f"Croquis: {name}", dimensions, monochrome, locations)
     app.imageset = image_paths
     app.main_menu_callback = callback
 
